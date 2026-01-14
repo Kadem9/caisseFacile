@@ -80,9 +80,11 @@ async function apiRequest<T>(
 // Health Check
 // ===================================
 
-export async function checkHealth(): Promise<boolean> {
+export async function checkHealth(): Promise<{ success: boolean; error?: string }> {
     const result = await apiRequest<{ status: string }>('/api/health');
-    return result.success && result.data?.status === 'ok';
+    if (!result.success) return { success: false, error: result.error };
+    if (result.data?.status !== 'ok') return { success: false, error: 'Format de réponse invalide' };
+    return { success: true };
 }
 
 // ===================================

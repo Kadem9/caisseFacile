@@ -144,11 +144,11 @@ export const SettingsPage: React.FC = () => {
         setIsCheckingSync(true);
         setSyncStatus(null);
         try {
-            const isHealthy = await checkHealth();
-            if (isHealthy) {
+            const result = await checkHealth();
+            if (result.success) {
                 setSyncStatus({ type: 'success', message: 'Connexion au serveur établie !' });
             } else {
-                setSyncStatus({ type: 'error', message: 'Le serveur a répondu avec une erreur.' });
+                setSyncStatus({ type: 'error', message: result.error || 'Le serveur a répondu avec une erreur.' });
             }
         } catch (err) {
             setSyncStatus({ type: 'error', message: `Erreur de connexion : ${String(err)}` });
