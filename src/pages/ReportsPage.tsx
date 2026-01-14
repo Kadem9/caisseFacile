@@ -4,7 +4,20 @@
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button } from '../components/ui';
+import {
+    Button,
+    ArrowLeftIcon,
+    ChartIcon,
+    PackageIcon,
+    EuroIcon,
+    ReceiptIcon,
+    CashIcon,
+    CardIcon,
+    TrophyIcon,
+    HistoryIcon,
+    SyncIcon,
+    ShoppingCartIcon
+} from '../components/ui';
 import { useTransactionStore, useProductStore } from '../stores';
 import { fetchTransactions, type TransactionData } from '../services/api';
 import { generateDailyReport, generateStockReport, exportTransactionsToCSV, downloadCSV } from '../utils';
@@ -178,12 +191,12 @@ export const ReportsPage: React.FC = () => {
         });
     };
 
-    const getPaymentIcon = (method: string): string => {
+    const getPaymentIcon = (method: string): React.ReactNode => {
         switch (method) {
-            case 'cash': return '💵';
-            case 'card': return '💳';
-            case 'mixed': return '🔄';
-            default: return '💰';
+            case 'cash': return <CashIcon size={18} />;
+            case 'card': return <CardIcon size={18} />;
+            case 'mixed': return <SyncIcon size={18} />;
+            default: return <EuroIcon size={18} />;
         }
     };
 
@@ -193,22 +206,22 @@ export const ReportsPage: React.FC = () => {
             <header className="reports-header">
                 <div className="reports-header__left">
                     <button className="reports-header__back" onClick={handleBack} type="button">
-                        ←
+                        <ArrowLeftIcon size={24} />
                     </button>
                     <h1 className="reports-header__title">Rapports & Statistiques</h1>
                 </div>
                 <div className="reports-header__actions">
                     <Button variant="ghost" size="sm" onClick={handleExportTransactions}>
-                        📥 Export CSV
+                        <ShoppingCartIcon size={16} /> Export CSV
                     </Button>
                     <Button variant="ghost" size="sm" onClick={handlePrintDailyReport}>
-                        📊 Rapport jour
+                        <ChartIcon size={16} /> Rapport jour
                     </Button>
                     <Button variant="ghost" size="sm" onClick={handlePrintStockReport}>
-                        📦 Rapport stock
+                        <PackageIcon size={16} /> Rapport stock
                     </Button>
                     <Button variant="secondary" onClick={handleGoToClosure}>
-                        📋 Clôture de caisse
+                        <ReceiptIcon size={16} /> Clôture de caisse
                     </Button>
                 </div>
             </header>
@@ -218,7 +231,9 @@ export const ReportsPage: React.FC = () => {
                 <div className="reports-stats">
                     <div className="stat-card">
                         <div className="stat-card__header">
-                            <div className="stat-card__icon stat-card__icon--sales">💰</div>
+                            <div className="stat-card__icon stat-card__icon--sales">
+                                <EuroIcon size={24} />
+                            </div>
                         </div>
                         <div className="stat-card__value">{formatPrice(stats.totalSales)}</div>
                         <div className="stat-card__label">Chiffre d'affaires</div>
@@ -226,7 +241,9 @@ export const ReportsPage: React.FC = () => {
 
                     <div className="stat-card">
                         <div className="stat-card__header">
-                            <div className="stat-card__icon stat-card__icon--transactions">🧾</div>
+                            <div className="stat-card__icon stat-card__icon--transactions">
+                                <ReceiptIcon size={24} />
+                            </div>
                         </div>
                         <div className="stat-card__value">{stats.totalTransactions}</div>
                         <div className="stat-card__label">Transactions</div>
@@ -234,7 +251,9 @@ export const ReportsPage: React.FC = () => {
 
                     <div className="stat-card">
                         <div className="stat-card__header">
-                            <div className="stat-card__icon stat-card__icon--cash">💵</div>
+                            <div className="stat-card__icon stat-card__icon--cash">
+                                <CashIcon size={24} />
+                            </div>
                         </div>
                         <div className="stat-card__value">{formatPrice(stats.totalCash)}</div>
                         <div className="stat-card__label">Espèces</div>
@@ -242,7 +261,9 @@ export const ReportsPage: React.FC = () => {
 
                     <div className="stat-card">
                         <div className="stat-card__header">
-                            <div className="stat-card__icon stat-card__icon--card">💳</div>
+                            <div className="stat-card__icon stat-card__icon--card">
+                                <CardIcon size={24} />
+                            </div>
                         </div>
                         <div className="stat-card__value">{formatPrice(stats.totalCard)}</div>
                         <div className="stat-card__label">Carte</div>
@@ -253,7 +274,10 @@ export const ReportsPage: React.FC = () => {
                     {/* Sales Chart */}
                     <div className="report-section">
                         <div className="report-section__header">
-                            <h2 className="report-section__title">📊 Ventes des 7 derniers jours</h2>
+                            <h2 className="report-section__title">
+                                <ChartIcon size={20} className="inline mr-2" />
+                                Ventes des 7 derniers jours
+                            </h2>
                         </div>
                         <div className="report-section__body">
                             <div className="chart-container">
@@ -278,7 +302,10 @@ export const ReportsPage: React.FC = () => {
                     {/* Top Products */}
                     <div className="report-section">
                         <div className="report-section__header">
-                            <h2 className="report-section__title">🏆 Top Produits</h2>
+                            <h2 className="report-section__title">
+                                <TrophyIcon size={20} className="inline mr-2" />
+                                Top Produits
+                            </h2>
                         </div>
                         <div className="report-section__body">
                             {topProducts.length > 0 ? (
@@ -298,7 +325,9 @@ export const ReportsPage: React.FC = () => {
                                 </div>
                             ) : (
                                 <div className="reports-empty">
-                                    <span className="reports-empty__icon">📦</span>
+                                    <span className="reports-empty__icon">
+                                        <PackageIcon size={48} color="#ccc" />
+                                    </span>
                                     <p className="reports-empty__text">Aucune donnée disponible</p>
                                 </div>
                             )}
@@ -308,7 +337,10 @@ export const ReportsPage: React.FC = () => {
                     {/* Recent Transactions */}
                     <div className="report-section">
                         <div className="report-section__header">
-                            <h2 className="report-section__title">🕐 Dernières transactions</h2>
+                            <h2 className="report-section__title">
+                                <HistoryIcon size={20} className="inline mr-2" />
+                                Dernières transactions
+                            </h2>
                             <div className="report-section__actions">
                                 <button
                                     className={`report-section__filter ${timeFilter === 'today' ? 'report-section__filter--active' : ''}`}
@@ -351,7 +383,9 @@ export const ReportsPage: React.FC = () => {
                                 </div>
                             ) : (
                                 <div className="reports-empty">
-                                    <span className="reports-empty__icon">🧾</span>
+                                    <span className="reports-empty__icon">
+                                        <ReceiptIcon size={48} color="#ccc" />
+                                    </span>
                                     <p className="reports-empty__text">Aucune transaction pour cette période</p>
                                 </div>
                             )}

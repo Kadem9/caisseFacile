@@ -3,6 +3,7 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { PackageIcon, SettingsIcon, ChartIcon, ClipboardIcon, CardIcon, BoxIcon } from '../components/ui';
 import { useAuthStore } from '../stores';
 import './AdminLayout.css';
+import logoImg from '../assets/logo-asmsp.png';
 
 export const AdminLayout: React.FC = () => {
     const navigate = useNavigate();
@@ -20,12 +21,12 @@ export const AdminLayout: React.FC = () => {
                     <div className="admin-sidebar__brand">
                         <div className="admin-sidebar__logo-wrapper">
                             <img
-                                src="/src/assets/logo-asmsp.png"
+                                src={logoImg}
                                 alt="Logo"
                                 className="admin-sidebar__logo-img"
                                 onError={(e) => {
                                     e.currentTarget.style.display = 'none';
-                                    e.currentTarget.parentElement!.innerText = '⚽';
+                                    e.currentTarget.parentElement!.innerText = 'AG';
                                 }}
                             />
                         </div>

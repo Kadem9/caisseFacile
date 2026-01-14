@@ -4,7 +4,13 @@
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button } from '../components/ui';
+import {
+    Button,
+    ArrowLeftIcon,
+    PackageIcon,
+    PlusIcon,
+    MinusIcon
+} from '../components/ui';
 import { useProductStore, useStockStore, useAuthStore, useSyncStore } from '../stores';
 import { getStockMovements as fetchStockMovements, createStockMovement, type StockMovementData } from '../services/api';
 import type { Product, StockMovementType, StockMovement } from '../types';
@@ -90,8 +96,8 @@ export const StockPage: React.FC = () => {
         return categories.find(c => c.id === categoryId)?.name || '';
     }, [categories]);
 
-    const getCategoryIcon = useCallback((categoryId: number) => {
-        return categories.find(c => c.id === categoryId)?.icon || '📦';
+    const getCategoryIcon = useCallback((categoryId: number): React.ReactNode => {
+        return categories.find(c => c.id === categoryId)?.icon || <PackageIcon size={24} color="#ccc" />;
     }, [categories]);
 
     const getStockStatus = (product: Product) => {
@@ -201,7 +207,7 @@ export const StockPage: React.FC = () => {
             <header className="stock-header">
                 <div className="stock-header__left">
                     <button className="stock-header__back" onClick={handleBack} type="button">
-                        ←
+                        <ArrowLeftIcon size={24} />
                     </button>
                     <h1 className="stock-header__title">Gestion des Stocks</h1>
                 </div>
@@ -285,14 +291,14 @@ export const StockPage: React.FC = () => {
                                             onClick={() => setMovementType('in')}
                                             type="button"
                                         >
-                                            ➕ Entrée
+                                            <PlusIcon size={16} /> Entrée
                                         </button>
                                         <button
                                             className={`movement-form__type-btn movement-form__type-btn--out ${movementType === 'out' ? 'movement-form__type-btn--active' : ''}`}
                                             onClick={() => setMovementType('out')}
                                             type="button"
                                         >
-                                            ➖ Sortie
+                                            <MinusIcon size={16} /> Sortie
                                         </button>
                                     </div>
                                 </div>
@@ -340,7 +346,7 @@ export const StockPage: React.FC = () => {
                                                 return (
                                                     <div key={movement.id} className="movement-item">
                                                         <div className={`movement-item__icon movement-item__icon--${isEntry ? 'in' : 'out'}`}>
-                                                            {isEntry ? '+' : '-'}
+                                                            {isEntry ? <PlusIcon size={14} /> : <MinusIcon size={14} />}
                                                         </div>
                                                         <div className="movement-item__info">
                                                             <span className="movement-item__qty">
@@ -369,13 +375,15 @@ export const StockPage: React.FC = () => {
                                     onClick={handleSubmitMovement}
                                     disabled={quantity <= 0}
                                 >
-                                    {movementType === 'in' ? '➕ Ajouter au stock' : '➖ Retirer du stock'}
+                                    {movementType === 'in' ? 'Ajouter au stock' : 'Retirer du stock'}
                                 </Button>
                             </div>
                         </>
                     ) : (
                         <div className="stock-panel__empty">
-                            <span className="stock-panel__empty-icon">📦</span>
+                            <span className="stock-panel__empty-icon">
+                                <PackageIcon size={48} color="#ccc" />
+                            </span>
                             <p>Sélectionnez un produit pour gérer son stock</p>
                         </div>
                     )}

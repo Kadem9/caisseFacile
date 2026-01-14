@@ -4,6 +4,7 @@
 
 import React, { useEffect, useState } from 'react';
 import './SplashScreen.css';
+import logoImg from '../../assets/logo-asmsp.png';
 
 // Funny quotes related to football/bar
 const QUOTES = [
@@ -76,7 +77,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
                 <div className="splash-screen__logo">
                     {/* Try to load standard logo, fallback to emoji if fail */}
                     <img
-                        src="/src/assets/logo-asmsp.png"
+                        src={logoImg}
                         alt="Logo"
                         onError={(e) => {
                             e.currentTarget.style.display = 'none';

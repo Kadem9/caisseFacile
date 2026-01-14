@@ -5,7 +5,21 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { invoke } from '@tauri-apps/api/core';
-import { Button } from '../components/ui';
+import {
+    Button,
+    ArrowLeftIcon,
+    SettingsIcon,
+    PrinterIcon,
+    DrawerIcon,
+    SyncIcon,
+    CheckIcon,
+    XIcon,
+    RefreshIcon,
+    SearchIcon,
+    MonitorIcon,
+    LightbulbIcon,
+    WifiIcon
+} from '../components/ui';
 import './SettingsPage.css';
 import {
     getApiUrl,
@@ -163,9 +177,12 @@ export const SettingsPage: React.FC = () => {
             <header className="settings-header">
                 <div className="settings-header__left">
                     <button className="settings-header__back" onClick={handleBack} type="button">
-                        ←
+                        <ArrowLeftIcon size={24} />
                     </button>
-                    <h1 className="settings-header__title">⚙️ Paramètres</h1>
+                    <h1 className="settings-header__title">
+                        <SettingsIcon size={24} className="inline mr-2" />
+                        Paramètres
+                    </h1>
                 </div>
             </header>
 
@@ -177,21 +194,21 @@ export const SettingsPage: React.FC = () => {
                         onClick={() => setActiveTab('printer')}
                         type="button"
                     >
-                        🖨️ Imprimante
+                        <PrinterIcon size={18} className="inline mr-2" /> Imprimante
                     </button>
                     <button
                         className={`settings-tab ${activeTab === 'drawer' ? 'settings-tab--active' : ''}`}
                         onClick={() => setActiveTab('drawer')}
                         type="button"
                     >
-                        💰 Tiroir-caisse
+                        <DrawerIcon size={18} className="inline mr-2" /> Tiroir-caisse
                     </button>
                     <button
                         className={`settings-tab ${activeTab === 'sync' ? 'settings-tab--active' : ''}`}
                         onClick={() => setActiveTab('sync')}
                         type="button"
                     >
-                        🔄 Synchronisation
+                        <SyncIcon size={18} className="inline mr-2" /> Synchronisation
                     </button>
                 </nav>
 
@@ -200,13 +217,18 @@ export const SettingsPage: React.FC = () => {
                     {/* Test Result Alert */}
                     {testResult && (
                         <div className={`settings-alert settings-alert--${testResult.type}`}>
-                            {testResult.type === 'success' ? '✅' : '❌'} {testResult.message}
+                            {testResult.type === 'success' ? (
+                                <CheckIcon size={20} className="inline mr-2" />
+                            ) : (
+                                <XIcon size={20} className="inline mr-2" />
+                            )}
+                            {testResult.message}
                             <button
                                 className="settings-alert__close"
                                 onClick={() => setTestResult(null)}
                                 type="button"
                             >
-                                ×
+                                <XIcon size={16} />
                             </button>
                         </div>
                     )}
@@ -217,7 +239,11 @@ export const SettingsPage: React.FC = () => {
                             <div className="settings-section__header">
                                 <h2>Configuration Imprimante</h2>
                                 <Button variant="ghost" size="sm" onClick={scanPorts} disabled={isScanning}>
-                                    {isScanning ? '⏳ Scan...' : '🔍 Scanner les ports'}
+                                    {isScanning ? (
+                                        <><RefreshIcon size={16} className="animate-spin mr-2" /> Scan...</>
+                                    ) : (
+                                        <><SearchIcon size={16} className="mr-2" /> Scanner les ports</>
+                                    )}
                                 </Button>
                             </div>
 
@@ -280,7 +306,7 @@ export const SettingsPage: React.FC = () => {
 
                                 <div className="settings-form__actions">
                                     <Button variant="secondary" onClick={handleTestPrinter}>
-                                        🧪 Tester l'impression
+                                        <MonitorIcon size={16} className="mr-2" /> Tester l'impression
                                     </Button>
                                 </div>
                             </div>
@@ -305,7 +331,8 @@ export const SettingsPage: React.FC = () => {
                             <div className="settings-form">
                                 <div className="settings-form__info">
                                     <p>
-                                        💡 La plupart des tiroirs-caisse sont connectés via l'imprimante.
+                                        <LightbulbIcon size={16} className="inline mr-1" />
+                                        La plupart des tiroirs-caisse sont connectés via l'imprimante.
                                         Si c'est votre cas, laissez le port vide - le tiroir utilisera
                                         le port de l'imprimante.
                                     </p>
@@ -354,7 +381,7 @@ export const SettingsPage: React.FC = () => {
 
                                 <div className="settings-form__actions">
                                     <Button variant="secondary" onClick={handleOpenDrawer}>
-                                        🔓 Tester le tiroir
+                                        <MonitorIcon size={16} className="mr-2" /> Tester le tiroir
                                     </Button>
                                 </div>
                             </div>
@@ -374,7 +401,7 @@ export const SettingsPage: React.FC = () => {
                                         window.location.reload();
                                     }}
                                 >
-                                    🔄 Réinitialiser par défaut
+                                    <RefreshIcon size={16} className="mr-2" /> Réinitialiser par défaut
                                 </Button>
                             </div>
 
@@ -396,7 +423,11 @@ export const SettingsPage: React.FC = () => {
                                             onClick={handleCheckConnection}
                                             disabled={isCheckingSync}
                                         >
-                                            {isCheckingSync ? '⏳...' : '📡 Tester'}
+                                            {isCheckingSync ? (
+                                                <RefreshIcon size={16} className="animate-spin" />
+                                            ) : (
+                                                <><WifiIcon size={16} className="mr-2" /> Tester</>
+                                            )}
                                         </Button>
                                     </div>
                                     <p className="settings-form__help">
@@ -406,18 +437,25 @@ export const SettingsPage: React.FC = () => {
 
                                 {syncStatus && (
                                     <div className={`settings-alert settings-alert--${syncStatus.type}`} style={{ padding: '8px', marginBottom: '15px' }}>
-                                        {syncStatus.type === 'success' ? '✅' : '❌'} {syncStatus.message}
+                                        {syncStatus.type === 'success' ? (
+                                            <CheckIcon size={20} className="inline mr-2" />
+                                        ) : (
+                                            <XIcon size={20} className="inline mr-2" />
+                                        )}
+                                        {syncStatus.message}
                                     </div>
                                 )}
 
                                 <div className="settings-form__info">
                                     <p>
-                                        📡 Le serveur backend permet de synchroniser les données
+                                        <WifiIcon size={16} className="inline mr-2" />
+                                        Le serveur backend permet de synchroniser les données
                                         vers un dashboard distant. Assurez-vous que le serveur est
                                         accessible à l'adresse indiquée.
                                     </p>
                                     <p style={{ marginTop: '10px', fontSize: '0.85em', color: 'var(--text-muted)' }}>
-                                        💡 Si vous changez l'URL, il est recommandé de redémarrer l'application.
+                                        <LightbulbIcon size={16} className="inline mr-1" />
+                                        Si vous changez l'URL, il est recommandé de redémarrer l'application.
                                     </p>
                                 </div>
                             </div>

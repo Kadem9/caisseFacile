@@ -11,6 +11,7 @@ import { getProductImageUrl } from '../helpers/urlHelper';
 import { useAuthStore, useCartStore, useTransactionStore, useProductStore, useMenuStore, useSyncStore } from '../stores';
 import type { Menu, Product, Transaction } from '../types';
 import './POSPage.css';
+import logoImg from '../assets/logo-asmsp.png';
 
 export const POSPage: React.FC = () => {
     const navigate = useNavigate();
@@ -199,7 +200,7 @@ export const POSPage: React.FC = () => {
                 <div className="pos-header__brand">
                     <div className="pos-header__logo-wrapper">
                         <img
-                            src="/src/assets/logo-asmsp.png"
+                            src={logoImg}
                             alt="AS Manissieux"
                             className="pos-header__logo-img"
                             onError={(e) => {
@@ -408,7 +409,7 @@ export const POSPage: React.FC = () => {
                                     {item.product.imagePath ? (
                                         <div className="pos-cart__item-image-wrapper">
                                             <img
-                                                src={item.product.imagePath}
+                                                src={getProductImageUrl(item.product.imagePath)}
                                                 alt={item.product.name}
                                                 className="pos-cart__item-image"
                                             />

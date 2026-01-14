@@ -4,7 +4,19 @@
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button } from '../components/ui';
+import {
+    Button,
+    ArrowLeftIcon,
+    CircleIcon,
+    ChartIcon,
+    CashIcon,
+    CardIcon,
+    EuroIcon,
+    HistoryIcon,
+    CheckIcon,
+    ArrowUpIcon,
+    ArrowDownIcon
+} from '../components/ui';
 import { useAuthStore, useTransactionStore, useClosureStore, useSyncStore } from '../stores';
 import { getCurrentSession, saveClosure, type CurrentSessionData } from '../services/api';
 import type { CashClosure } from '../types';
@@ -173,14 +185,18 @@ export const ClosurePage: React.FC = () => {
             {/* Header */}
             <header className="closure-header">
                 <Button variant="secondary" onClick={handleBack}>
-                    ← Retour au POS
+                    <ArrowLeftIcon size={18} className="mr-2" /> Retour au POS
                 </Button>
                 <h1>Clôture de Caisse</h1>
             </header>
 
             <div className={`closure-status ${closureOpen ? 'closure-status--open' : 'closure-status--closed'}`}>
                 <div className="closure-status__icon">
-                    {closureOpen ? '🟢' : '🟡'}
+                    {closureOpen ? (
+                        <CircleIcon size={24} color="#10b981" />
+                    ) : (
+                        <CircleIcon size={24} color="#f59e0b" />
+                    )}
                 </div>
                 <h2 className="closure-status__title">
                     {closureOpen ? 'Caisse ouverte' : 'Caisse fermée'}
@@ -196,14 +212,17 @@ export const ClosurePage: React.FC = () => {
                 /* Open Closure Button */
                 <div className="closure-actions">
                     <Button variant="secondary" size="xl" isFullWidth onClick={handleOpenClosure}>
-                        🔓 Ouvrir la caisse
+                        Ouvrir la caisse
                     </Button>
                 </div>
             ) : (
                 <>
                     {/* Session Summary */}
                     <div className="closure-summary">
-                        <h3 className="closure-summary__title">📊 Résumé de la session</h3>
+                        <h3 className="closure-summary__title">
+                            <ChartIcon size={20} className="inline mr-2" />
+                            Résumé de la session
+                        </h3>
                         <div className="closure-summary__grid">
                             <div className="closure-summary__item">
                                 <span className="closure-summary__label">Transactions</span>
@@ -216,11 +235,17 @@ export const ClosurePage: React.FC = () => {
                                 </span>
                             </div>
                             <div className="closure-summary__item">
-                                <span className="closure-summary__label">💵 Espèces</span>
+                                <span className="closure-summary__label">
+                                    <CashIcon size={16} className="inline mr-2" />
+                                    Espèces
+                                </span>
                                 <span className="closure-summary__value">{formatPrice(sessionStats.totalCash)}</span>
                             </div>
                             <div className="closure-summary__item">
-                                <span className="closure-summary__label">💳 Carte</span>
+                                <span className="closure-summary__label">
+                                    <CardIcon size={16} className="inline mr-2" />
+                                    Carte
+                                </span>
                                 <span className="closure-summary__value">{formatPrice(sessionStats.totalCard)}</span>
                             </div>
                         </div>
@@ -228,7 +253,10 @@ export const ClosurePage: React.FC = () => {
 
                     {/* Cash Count */}
                     <div className="closure-count">
-                        <h3 className="closure-count__title">💰 Comptage de caisse</h3>
+                        <h3 className="closure-count__title">
+                            <EuroIcon size={20} className="inline mr-2" />
+                            Comptage de caisse
+                        </h3>
 
                         <div className="closure-count__group">
                             <label className="closure-count__label">
@@ -286,11 +314,13 @@ export const ClosurePage: React.FC = () => {
                     {actualAmount > 0 && (
                         <div className={`closure-difference closure-difference--${getDifferenceClass(difference)}`}>
                             <span className="closure-difference__label">
-                                {difference === 0
-                                    ? '✓ Caisse équilibrée'
-                                    : difference > 0
-                                        ? '▲ Excédent'
-                                        : '▼ Déficit'}
+                                {difference === 0 ? (
+                                    <><CheckIcon size={18} className="inline mr-1" /> Caisse équilibrée</>
+                                ) : difference > 0 ? (
+                                    <><ArrowUpIcon size={18} className="inline mr-1" /> Excédent</>
+                                ) : (
+                                    <><ArrowDownIcon size={18} className="inline mr-1" /> Déficit</>
+                                )}
                             </span>
                             <span className="closure-difference__value">
                                 {difference >= 0 ? '+' : ''}{formatPrice(difference)}
@@ -309,7 +339,7 @@ export const ClosurePage: React.FC = () => {
                             onClick={handleCloseClosure}
                             disabled={actualAmount <= 0}
                         >
-                            🔒 Clôturer la caisse
+                            Clôturer la caisse
                         </Button>
                     </div>
                 </>
@@ -318,11 +348,16 @@ export const ClosurePage: React.FC = () => {
             {/* History */}
             {closureHistory.length > 0 && (
                 <div className="closure-history">
-                    <h3 className="closure-history__title">📋 Historique des clôtures</h3>
+                    <h3 className="closure-history__title">
+                        <HistoryIcon size={20} className="inline mr-2" />
+                        Historique des clôtures
+                    </h3>
                     <div className="closure-history__list">
                         {closureHistory.map((closure) => (
                             <div key={closure.id} className="closure-history__item">
-                                <div className="closure-history__item-icon">✓</div>
+                                <div className="closure-history__item-icon">
+                                    <CheckIcon size={16} />
+                                </div>
                                 <div className="closure-history__item-info">
                                     <span className="closure-history__item-date">
                                         {closure.closedAt ? formatDate(closure.closedAt) : 'N/A'}

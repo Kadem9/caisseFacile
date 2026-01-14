@@ -9,6 +9,7 @@ import { NumPad, PinDisplay } from '../components/ui';
 import { useAuthStore } from '../stores';
 import type { User } from '../types';
 import './LoginPage.css';
+import logoImg from '../assets/logo-asmsp.png';
 
 // Temporary mock users for development
 const MOCK_USERS: User[] = [
@@ -108,7 +109,7 @@ export const LoginPage: React.FC = () => {
                     <div className="login-page__brand">
                         <div className="login-page__logo-wrapper">
                             <img
-                                src="/src/assets/logo-asmsp.png"
+                                src={logoImg}
                                 alt="Logo"
                                 className="login-page__logo-img"
                                 onError={(e) => {

@@ -25,7 +25,11 @@ export const getProductImageUrl = (imagePath: string | undefined | null): string
 
     // Build the server URL
     let serverUrl = imagePath;
-    if (!imagePath.startsWith('http')) {
+
+    // Sanitize old localhost URLs from database
+    if (imagePath.includes('localhost:3001')) {
+        serverUrl = imagePath.replace(/http:\/\/localhost:3001/, getApiUrl());
+    } else if (!imagePath.startsWith('http')) {
         // Relative path - prepend API URL
         if (imagePath.startsWith('/uploads/') || imagePath.startsWith('uploads/')) {
             const baseUrl = getApiUrl();

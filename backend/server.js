@@ -308,7 +308,7 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
         // Delete original file
         fs.unlinkSync(req.file.path);
 
-        const fileUrl = `http://localhost:${PORT}/uploads/${outputFilename}`;
+        const fileUrl = `/uploads/${outputFilename}`;
 
         res.json({
             success: true,
@@ -318,7 +318,7 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
     } catch (error) {
         console.error('Image conversion error:', error);
         // If conversion fails, try to use original
-        const fileUrl = `http://localhost:${PORT}/uploads/${req.file.filename}`;
+        const fileUrl = `/uploads/${req.file.filename}`;
         res.json({
             success: true,
             path: fileUrl,
