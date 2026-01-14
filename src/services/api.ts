@@ -2,7 +2,7 @@
 // API Service - HTTP Client Configuration
 // ===================================
 
-const DEFAULT_API_URL = 'http://localhost:3001';
+const DEFAULT_API_URL = 'http://54.36.98.249:3001';
 
 // Get API URL from localStorage or use default
 export function getApiUrl(): string {
