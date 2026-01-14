@@ -8,6 +8,10 @@ use hardware::{
     test_printer,
     open_cash_drawer,
     check_hardware_status,
+    list_system_printers,
+    print_via_driver,
+    open_drawer_via_driver,
+    test_printer_driver,
 };
 
 #[tauri::command]
@@ -30,6 +34,10 @@ pub fn run() {
             test_printer,
             open_cash_drawer,
             check_hardware_status,
+            list_system_printers,
+            print_via_driver,
+            open_drawer_via_driver,
+            test_printer_driver,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

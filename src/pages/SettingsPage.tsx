@@ -42,20 +42,32 @@ interface HardwareStatus {
     drawer_port: string | null;
 }
 
+interface SystemPrinterInfo {
+    name: string;
+    driver_name: string;
+    is_default: boolean;
+}
+
+type ConnectionMode = 'serial' | 'driver';
+
 interface HardwareConfig {
+    connectionMode: ConnectionMode;
     printerPort: string;
     printerBaudRate: number;
     paperWidth: number;
     drawerPort: string;
     drawerPin: number;
+    systemPrinterName: string;
 }
 
 const DEFAULT_CONFIG: HardwareConfig = {
+    connectionMode: 'driver',
     printerPort: '',
     printerBaudRate: 9600,
     paperWidth: 80,
     drawerPort: '',
     drawerPin: 0,
+    systemPrinterName: '',
 };
 
 const BAUD_RATES = [9600, 19200, 38400, 57600, 115200];
@@ -75,10 +87,12 @@ export const SettingsPage: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'printer' | 'drawer' | 'sync'>('printer');
     const [isCheckingSync, setIsCheckingSync] = useState(false);
     const [syncStatus, setSyncStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+    const [systemPrinters, setSystemPrinters] = useState<SystemPrinterInfo[]>([]);
 
     // Load configuration on mount
     useEffect(() => {
         scanPorts();
+        scanSystemPrinters();
         checkStatus();
     }, []);
 
@@ -100,6 +114,21 @@ export const SettingsPage: React.FC = () => {
         }
     }, []);
 
+    const scanSystemPrinters = useCallback(async () => {
+        try {
+            const result = await invoke<SystemPrinterInfo[]>('list_system_printers');
+            setSystemPrinters(result);
+            // Auto-select default printer if none selected
+            if (!config.systemPrinterName && result.length > 0) {
+                const defaultPrinter = result.find(p => p.is_default) || result[0];
+                setConfig(prev => ({ ...prev, systemPrinterName: defaultPrinter.name }));
+            }
+        } catch (err) {
+            console.error('Failed to list system printers:', err);
+            setSystemPrinters([]);
+        }
+    }, [config.systemPrinterName]);
+
     const checkStatus = useCallback(async () => {
         try {
             const result = await invoke<HardwareStatus>('check_hardware_status', {
@@ -113,42 +142,77 @@ export const SettingsPage: React.FC = () => {
     }, [config.printerPort, config.drawerPort]);
 
     const handleTestPrinter = useCallback(async () => {
-        if (!config.printerPort) {
-            setTestResult({ type: 'error', message: 'Sélectionnez un port imprimante' });
-            return;
-        }
-
         setTestResult(null);
-        try {
-            const result = await invoke<string>('test_printer', {
-                portName: config.printerPort,
-                baudRate: config.printerBaudRate,
-            });
-            setTestResult({ type: 'success', message: result });
-        } catch (err) {
-            setTestResult({ type: 'error', message: String(err) });
+
+        if (config.connectionMode === 'driver') {
+            // Test via Windows driver
+            if (!config.systemPrinterName) {
+                setTestResult({ type: 'error', message: 'Sélectionnez une imprimante système' });
+                return;
+            }
+            try {
+                const result = await invoke<string>('test_printer_driver', {
+                    printerName: config.systemPrinterName,
+                });
+                setTestResult({ type: 'success', message: result });
+            } catch (err) {
+                setTestResult({ type: 'error', message: String(err) });
+            }
+        } else {
+            // Test via serial port
+            if (!config.printerPort) {
+                setTestResult({ type: 'error', message: 'Sélectionnez un port imprimante' });
+                return;
+            }
+            try {
+                const result = await invoke<string>('test_printer', {
+                    portName: config.printerPort,
+                    baudRate: config.printerBaudRate,
+                });
+                setTestResult({ type: 'success', message: result });
+            } catch (err) {
+                setTestResult({ type: 'error', message: String(err) });
+            }
         }
-    }, [config.printerPort, config.printerBaudRate]);
+    }, [config.connectionMode, config.systemPrinterName, config.printerPort, config.printerBaudRate]);
 
     const handleOpenDrawer = useCallback(async () => {
-        const port = config.drawerPort || config.printerPort;
-        if (!port) {
-            setTestResult({ type: 'error', message: 'Sélectionnez un port' });
-            return;
-        }
-
         setTestResult(null);
-        try {
-            const result = await invoke<string>('open_cash_drawer', {
-                portName: port,
-                baudRate: config.printerBaudRate,
-                pin: config.drawerPin,
-            });
-            setTestResult({ type: 'success', message: result });
-        } catch (err) {
-            setTestResult({ type: 'error', message: String(err) });
+
+        if (config.connectionMode === 'driver') {
+            // Open drawer via Windows driver
+            if (!config.systemPrinterName) {
+                setTestResult({ type: 'error', message: 'Sélectionnez une imprimante système' });
+                return;
+            }
+            try {
+                const result = await invoke<string>('open_drawer_via_driver', {
+                    printerName: config.systemPrinterName,
+                    pin: config.drawerPin,
+                });
+                setTestResult({ type: 'success', message: result });
+            } catch (err) {
+                setTestResult({ type: 'error', message: String(err) });
+            }
+        } else {
+            // Open drawer via serial port
+            const port = config.drawerPort || config.printerPort;
+            if (!port) {
+                setTestResult({ type: 'error', message: 'Sélectionnez un port' });
+                return;
+            }
+            try {
+                const result = await invoke<string>('open_cash_drawer', {
+                    portName: port,
+                    baudRate: config.printerBaudRate,
+                    pin: config.drawerPin,
+                });
+                setTestResult({ type: 'success', message: result });
+            } catch (err) {
+                setTestResult({ type: 'error', message: String(err) });
+            }
         }
-    }, [config.drawerPort, config.printerPort, config.printerBaudRate, config.drawerPin]);
+    }, [config.connectionMode, config.systemPrinterName, config.drawerPort, config.printerPort, config.printerBaudRate, config.drawerPin]);
 
     const handleBack = useCallback(() => {
         navigate('/pos');
@@ -238,46 +302,105 @@ export const SettingsPage: React.FC = () => {
                         <div className="settings-section">
                             <div className="settings-section__header">
                                 <h2>Configuration Imprimante</h2>
-                                <Button variant="ghost" size="sm" onClick={scanPorts} disabled={isScanning}>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={config.connectionMode === 'driver' ? scanSystemPrinters : scanPorts}
+                                    disabled={isScanning}
+                                >
                                     {isScanning ? (
                                         <><RefreshIcon size={16} className="animate-spin mr-2" /> Scan...</>
                                     ) : (
-                                        <><SearchIcon size={16} className="mr-2" /> Scanner les ports</>
+                                        <><SearchIcon size={16} className="mr-2" /> Actualiser</>
                                     )}
                                 </Button>
                             </div>
 
                             <div className="settings-form">
+                                {/* Connection Mode Toggle */}
                                 <div className="settings-form__group">
-                                    <label>Port série</label>
-                                    <select
-                                        value={config.printerPort}
-                                        onChange={(e) => setConfig({ ...config, printerPort: e.target.value })}
-                                    >
-                                        <option value="">-- Sélectionner --</option>
-                                        {ports.map((port) => (
-                                            <option key={port.name} value={port.name}>
-                                                {port.name} ({port.port_type})
-                                                {port.product && ` - ${port.product}`}
-                                            </option>
-                                        ))}
-                                    </select>
+                                    <label>Mode de connexion</label>
+                                    <div className="settings-radio-group">
+                                        <label className={`settings-radio ${config.connectionMode === 'driver' ? 'settings-radio--active' : ''}`}>
+                                            <input
+                                                type="radio"
+                                                name="connectionMode"
+                                                value="driver"
+                                                checked={config.connectionMode === 'driver'}
+                                                onChange={() => setConfig({ ...config, connectionMode: 'driver' })}
+                                            />
+                                            Pilote Windows
+                                        </label>
+                                        <label className={`settings-radio ${config.connectionMode === 'serial' ? 'settings-radio--active' : ''}`}>
+                                            <input
+                                                type="radio"
+                                                name="connectionMode"
+                                                value="serial"
+                                                checked={config.connectionMode === 'serial'}
+                                                onChange={() => setConfig({ ...config, connectionMode: 'serial' })}
+                                            />
+                                            Port série (COM)
+                                        </label>
+                                    </div>
                                 </div>
 
-                                <div className="settings-form__group">
-                                    <label>Vitesse (baud rate)</label>
-                                    <select
-                                        value={config.printerBaudRate}
-                                        onChange={(e) => setConfig({ ...config, printerBaudRate: Number(e.target.value) })}
-                                    >
-                                        {BAUD_RATES.map((rate) => (
-                                            <option key={rate} value={rate}>
-                                                {rate}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
+                                {/* Driver Mode */}
+                                {config.connectionMode === 'driver' && (
+                                    <div className="settings-form__group">
+                                        <label>Imprimante système</label>
+                                        <select
+                                            value={config.systemPrinterName}
+                                            onChange={(e) => setConfig({ ...config, systemPrinterName: e.target.value })}
+                                        >
+                                            <option value="">-- Sélectionner --</option>
+                                            {systemPrinters.map((printer) => (
+                                                <option key={printer.name} value={printer.name}>
+                                                    {printer.name} {printer.is_default && '(défaut)'}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <p className="settings-form__help">
+                                            Sélectionnez l'imprimante ticket installée dans Windows (ex: PPTII-A)
+                                        </p>
+                                    </div>
+                                )}
 
+                                {/* Serial Mode */}
+                                {config.connectionMode === 'serial' && (
+                                    <>
+                                        <div className="settings-form__group">
+                                            <label>Port série</label>
+                                            <select
+                                                value={config.printerPort}
+                                                onChange={(e) => setConfig({ ...config, printerPort: e.target.value })}
+                                            >
+                                                <option value="">-- Sélectionner --</option>
+                                                {ports.map((port) => (
+                                                    <option key={port.name} value={port.name}>
+                                                        {port.name} ({port.port_type})
+                                                        {port.product && ` - ${port.product}`}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        <div className="settings-form__group">
+                                            <label>Vitesse (baud rate)</label>
+                                            <select
+                                                value={config.printerBaudRate}
+                                                onChange={(e) => setConfig({ ...config, printerBaudRate: Number(e.target.value) })}
+                                            >
+                                                {BAUD_RATES.map((rate) => (
+                                                    <option key={rate} value={rate}>
+                                                        {rate}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </>
+                                )}
+
+                                {/* Paper Width - common to both modes */}
                                 <div className="settings-form__group">
                                     <label>Largeur papier</label>
                                     <div className="settings-radio-group">
@@ -312,12 +435,22 @@ export const SettingsPage: React.FC = () => {
                             </div>
 
                             {/* Status */}
-                            <div className="settings-status">
-                                <div className={`settings-status__indicator ${status?.printer_connected ? 'settings-status__indicator--connected' : ''}`}>
-                                    <span className="settings-status__dot" />
-                                    <span>{status?.printer_connected ? 'Imprimante connectée' : 'Non connectée'}</span>
+                            {config.connectionMode === 'serial' && (
+                                <div className="settings-status">
+                                    <div className={`settings-status__indicator ${status?.printer_connected ? 'settings-status__indicator--connected' : ''}`}>
+                                        <span className="settings-status__dot" />
+                                        <span>{status?.printer_connected ? 'Imprimante connectée' : 'Non connectée'}</span>
+                                    </div>
                                 </div>
-                            </div>
+                            )}
+                            {config.connectionMode === 'driver' && config.systemPrinterName && (
+                                <div className="settings-status">
+                                    <div className="settings-status__indicator settings-status__indicator--connected">
+                                        <span className="settings-status__dot" />
+                                        <span>Prêt: {config.systemPrinterName}</span>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
 

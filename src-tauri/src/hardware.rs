@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use serialport::{available_ports, SerialPortType};
 use std::io::Write;
 use std::time::Duration;
+use printers::common::base::job::PrinterJobOptions;
 
 // ===================================
 // Types
@@ -321,5 +322,190 @@ pub fn check_hardware_status(printer_port: Option<String>, drawer_port: Option<S
         printer_port,
         drawer_connected,
         drawer_port,
+    }
+}
+
+// ===================================
+// Windows Driver Printing (via printers crate)
+// ===================================
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SystemPrinterInfo {
+    pub name: String,
+    pub driver_name: String,
+    pub is_default: bool,
+}
+
+/// List all system printers (installed via Windows drivers)
+#[tauri::command]
+pub fn list_system_printers() -> Result<Vec<SystemPrinterInfo>, String> {
+    let printers_list = printers::get_printers();
+    let default_printer = printers::get_default_printer();
+    
+    let result: Vec<SystemPrinterInfo> = printers_list
+        .into_iter()
+        .map(|p| {
+            let is_default = default_printer.as_ref().map(|d| d.name == p.name).unwrap_or(false);
+            SystemPrinterInfo {
+                name: p.name.clone(),
+                driver_name: p.driver_name.clone(),
+                is_default,
+            }
+        })
+        .collect();
+    
+    Ok(result)
+}
+
+/// Print a receipt via Windows driver (RAW ESC/POS data sent to driver)
+#[tauri::command]
+pub fn print_via_driver(printer_name: String, receipt: ReceiptData, paper_width: u8) -> Result<String, String> {
+    // Find the printer
+    let printer = printers::get_printer_by_name(&printer_name);
+    let printer = match printer {
+        Some(p) => p,
+        None => return Err(format!("Printer '{}' not found", printer_name)),
+    };
+
+    // Build ESC/POS receipt data
+    let mut data: Vec<u8> = Vec::new();
+
+    // Initialize printer
+    data.extend_from_slice(&escpos::INIT);
+
+    // Header (centered, double size)
+    data.extend_from_slice(&escpos::ALIGN_CENTER);
+    data.extend_from_slice(&escpos::DOUBLE_SIZE_ON);
+    data.extend_from_slice(receipt.header.as_bytes());
+    data.push(escpos::LF);
+    data.push(escpos::LF);
+
+    // Reset to normal
+    data.extend_from_slice(&escpos::NORMAL_SIZE);
+    data.extend_from_slice(&escpos::ALIGN_LEFT);
+
+    // Date and transaction ID
+    let info_line = format!("#{} - {}", receipt.transaction_id, receipt.date);
+    data.extend_from_slice(info_line.as_bytes());
+    data.push(escpos::LF);
+
+    // Separator
+    let separator = "-".repeat(if paper_width == 58 { 32 } else { 48 });
+    data.extend_from_slice(separator.as_bytes());
+    data.push(escpos::LF);
+
+    // Items
+    for item in &receipt.items {
+        let item_line = format!(
+            "{} x{} @ {:.2}€",
+            item.name, item.quantity, item.unit_price
+        );
+        data.extend_from_slice(item_line.as_bytes());
+        data.push(escpos::LF);
+
+        // Subtotal aligned right
+        data.extend_from_slice(&escpos::ALIGN_RIGHT);
+        let subtotal_line = format!("{:.2}€", item.subtotal);
+        data.extend_from_slice(subtotal_line.as_bytes());
+        data.push(escpos::LF);
+        data.extend_from_slice(&escpos::ALIGN_LEFT);
+    }
+
+    // Separator
+    data.extend_from_slice(separator.as_bytes());
+    data.push(escpos::LF);
+
+    // Total (bold, larger)
+    data.extend_from_slice(&escpos::BOLD_ON);
+    data.extend_from_slice(&escpos::DOUBLE_HEIGHT_ON);
+    data.extend_from_slice(&escpos::ALIGN_RIGHT);
+    let total_line = format!("TOTAL: {:.2}€", receipt.total);
+    data.extend_from_slice(total_line.as_bytes());
+    data.push(escpos::LF);
+    data.extend_from_slice(&escpos::NORMAL_SIZE);
+    data.extend_from_slice(&escpos::BOLD_OFF);
+    data.extend_from_slice(&escpos::ALIGN_LEFT);
+
+    // Payment method
+    let payment_line = format!("Paiement: {}", receipt.payment_method);
+    data.extend_from_slice(payment_line.as_bytes());
+    data.push(escpos::LF);
+    data.push(escpos::LF);
+
+    // Footer
+    if let Some(footer) = &receipt.footer {
+        data.extend_from_slice(&escpos::ALIGN_CENTER);
+        data.extend_from_slice(footer.as_bytes());
+        data.push(escpos::LF);
+    }
+
+    // Thank you message
+    data.extend_from_slice(&escpos::ALIGN_CENTER);
+    data.extend_from_slice(b"Merci de votre visite!");
+    data.push(escpos::LF);
+    data.push(escpos::LF);
+    data.push(escpos::LF);
+
+    // Cut paper
+    data.extend_from_slice(&escpos::CUT_PARTIAL);
+
+    // Send to printer via driver
+    match printer.print(&data, PrinterJobOptions::none()) {
+        Ok(_) => Ok("Receipt printed successfully via driver".to_string()),
+        Err(e) => Err(format!("Failed to print via driver: {:?}", e)),
+    }
+}
+
+/// Open cash drawer via Windows driver (sends ESC/POS command to the printer)
+#[tauri::command]
+pub fn open_drawer_via_driver(printer_name: String, pin: u8) -> Result<String, String> {
+    let printer = printers::get_printer_by_name(&printer_name);
+    let printer = match printer {
+        Some(p) => p,
+        None => return Err(format!("Printer '{}' not found", printer_name)),
+    };
+
+    // Select kick pulse command based on pin
+    let drawer_cmd = if pin == 5 {
+        escpos::OPEN_DRAWER_PIN5
+    } else {
+        escpos::OPEN_DRAWER_PIN2
+    };
+
+    match printer.print(&drawer_cmd, PrinterJobOptions::none()) {
+        Ok(_) => Ok("Cash drawer opened via driver".to_string()),
+        Err(e) => Err(format!("Failed to open drawer via driver: {:?}", e)),
+    }
+}
+
+/// Test print via Windows driver
+#[tauri::command]
+pub fn test_printer_driver(printer_name: String) -> Result<String, String> {
+    let printer = printers::get_printer_by_name(&printer_name);
+    let printer = match printer {
+        Some(p) => p,
+        None => return Err(format!("Printer '{}' not found", printer_name)),
+    };
+
+    // Build test receipt
+    let mut data: Vec<u8> = Vec::new();
+    data.extend_from_slice(&escpos::INIT);
+    data.extend_from_slice(&escpos::ALIGN_CENTER);
+    data.extend_from_slice(&escpos::DOUBLE_SIZE_ON);
+    data.extend_from_slice(b"MA CAISSE AG");
+    data.push(escpos::LF);
+    data.extend_from_slice(&escpos::NORMAL_SIZE);
+    data.push(escpos::LF);
+    data.extend_from_slice(b"Test d'impression");
+    data.push(escpos::LF);
+    data.extend_from_slice(b"Configuration OK!");
+    data.push(escpos::LF);
+    data.push(escpos::LF);
+    data.push(escpos::LF);
+    data.extend_from_slice(&escpos::CUT_PARTIAL);
+
+    match printer.print(&data, PrinterJobOptions::none()) {
+        Ok(_) => Ok("Test print successful via driver".to_string()),
+        Err(e) => Err(format!("Failed to test print via driver: {:?}", e)),
     }
 }
