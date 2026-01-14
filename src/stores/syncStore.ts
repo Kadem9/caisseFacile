@@ -120,7 +120,8 @@ export const useSyncStore = create<SyncState>()(
             // Check server connection
             checkConnection: async () => {
                 try {
-                    const isOnline = await checkHealth();
+                    const result = await checkHealth();
+                    const isOnline = result.success;
                     set({
                         isOnline,
                         lastHealthCheck: new Date(),
