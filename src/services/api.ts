@@ -2,7 +2,7 @@
 // API Service - HTTP Client Configuration
 // ===================================
 
-const DEFAULT_API_URL = 'https://api.caissefacile.asmanissieux.fr';
+export const DEFAULT_API_URL = 'https://api.caissefacile.asmanissieux.fr';
 
 // Get API URL from localStorage or use default
 export function getApiUrl(): string {
@@ -13,7 +13,11 @@ export function getApiUrl(): string {
 }
 
 export function setApiUrl(url: string): void {
-    localStorage.setItem('ma-caisse-api-url', url);
+    if (!url || url.trim() === '') {
+        localStorage.removeItem('ma-caisse-api-url');
+    } else {
+        localStorage.setItem('ma-caisse-api-url', url.trim());
+    }
 }
 
 // API Response types

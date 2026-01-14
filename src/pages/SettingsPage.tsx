@@ -7,6 +7,12 @@ import { useNavigate } from 'react-router-dom';
 import { invoke } from '@tauri-apps/api/core';
 import { Button } from '../components/ui';
 import './SettingsPage.css';
+import {
+    getApiUrl,
+    setApiUrl as setApiUrlService,
+    DEFAULT_API_URL,
+    checkHealth,
+} from '../services/api';
 
 interface SerialPortInfo {
     name: string;
@@ -53,6 +59,8 @@ export const SettingsPage: React.FC = () => {
     const [isScanning, setIsScanning] = useState(false);
     const [testResult, setTestResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
     const [activeTab, setActiveTab] = useState<'printer' | 'drawer' | 'sync'>('printer');
+    const [isCheckingSync, setIsCheckingSync] = useState(false);
+    const [syncStatus, setSyncStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
     // Load configuration on mount
     useEffect(() => {
@@ -131,6 +139,23 @@ export const SettingsPage: React.FC = () => {
     const handleBack = useCallback(() => {
         navigate('/pos');
     }, [navigate]);
+
+    const handleCheckConnection = useCallback(async () => {
+        setIsCheckingSync(true);
+        setSyncStatus(null);
+        try {
+            const isHealthy = await checkHealth();
+            if (isHealthy) {
+                setSyncStatus({ type: 'success', message: 'Connexion au serveur établie !' });
+            } else {
+                setSyncStatus({ type: 'error', message: 'Le serveur a répondu avec une erreur.' });
+            }
+        } catch (err) {
+            setSyncStatus({ type: 'error', message: `Erreur de connexion : ${String(err)}` });
+        } finally {
+            setIsCheckingSync(false);
+        }
+    }, []);
 
     return (
         <div className="settings-page">
@@ -341,24 +366,58 @@ export const SettingsPage: React.FC = () => {
                         <div className="settings-section">
                             <div className="settings-section__header">
                                 <h2>Configuration Synchronisation</h2>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                        setApiUrlService(DEFAULT_API_URL);
+                                        window.location.reload();
+                                    }}
+                                >
+                                    🔄 Réinitialiser par défaut
+                                </Button>
                             </div>
 
                             <div className="settings-form">
                                 <div className="settings-form__group">
                                     <label>URL du serveur</label>
-                                    <input
-                                        type="url"
-                                        placeholder="http://localhost:3001"
-                                        defaultValue={localStorage.getItem('ma-caisse-api-url') || 'http://localhost:3001'}
-                                        onChange={(e) => localStorage.setItem('ma-caisse-api-url', e.target.value)}
-                                    />
+                                    <div style={{ display: 'flex', gap: '10px' }}>
+                                        <input
+                                            type="url"
+                                            placeholder={DEFAULT_API_URL}
+                                            value={getApiUrl()}
+                                            onChange={(e) => {
+                                                setApiUrlService(e.target.value);
+                                            }}
+                                            style={{ flex: 1 }}
+                                        />
+                                        <Button
+                                            variant="secondary"
+                                            onClick={handleCheckConnection}
+                                            disabled={isCheckingSync}
+                                        >
+                                            {isCheckingSync ? '⏳...' : '📡 Tester'}
+                                        </Button>
+                                    </div>
+                                    <p className="settings-form__help">
+                                        URL actuelle : <code>{getApiUrl()}</code>
+                                    </p>
                                 </div>
+
+                                {syncStatus && (
+                                    <div className={`settings-alert settings-alert--${syncStatus.type}`} style={{ padding: '8px', marginBottom: '15px' }}>
+                                        {syncStatus.type === 'success' ? '✅' : '❌'} {syncStatus.message}
+                                    </div>
+                                )}
 
                                 <div className="settings-form__info">
                                     <p>
                                         📡 Le serveur backend permet de synchroniser les données
                                         vers un dashboard distant. Assurez-vous que le serveur est
                                         accessible à l'adresse indiquée.
+                                    </p>
+                                    <p style={{ marginTop: '10px', fontSize: '0.85em', color: 'var(--text-muted)' }}>
+                                        💡 Si vous changez l'URL, il est recommandé de redémarrer l'application.
                                     </p>
                                 </div>
                             </div>
