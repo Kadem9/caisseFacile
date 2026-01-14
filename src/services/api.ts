@@ -1,6 +1,7 @@
 // ===================================
 // API Service - HTTP Client Configuration
 // ===================================
+import { fetch } from '@tauri-apps/plugin-http';
 
 export const DEFAULT_API_URL = 'https://api.caissefacile.asmanissieux.fr';
 
@@ -52,6 +53,7 @@ async function apiRequest<T>(
         const response = await fetch(url, {
             ...options,
             headers: headers,
+            connectTimeout: 5000,
         });
 
         if (!response.ok) {
