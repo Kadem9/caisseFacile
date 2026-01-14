@@ -1,0 +1,125 @@
+/* ===================================
+   Splash Screen Styles
+   =================================== */
+
+.splash-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+    /* Club Blue */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    color: white;
+    font-family: 'Inter', system-ui, sans-serif;
+    animation: fadeOut 0.5s ease-out forwards;
+    animation-delay: 2.5s;
+    /* Start fading out after delay */
+    animation-play-state: paused;
+    /* Controlled by React */
+}
+
+.splash-screen--fading {
+    animation-play-state: running;
+}
+
+.splash-screen__content {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2rem;
+    max-width: 600px;
+    padding: 2rem;
+}
+
+.splash-screen__logo {
+    width: 120px;
+    height: 120px;
+    background: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 3rem;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+    margin-bottom: 1rem;
+    animation: bounce 2s infinite ease-in-out;
+}
+
+.splash-screen__logo img {
+    width: 80%;
+    height: 80%;
+    object-fit: contain;
+}
+
+.splash-screen__title {
+    font-size: 2.5rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin: 0;
+    text-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.splash-screen__quote {
+    font-size: 1.1rem;
+    font-weight: 500;
+    opacity: 0.9;
+    font-style: italic;
+    min-height: 3.5rem;
+    /* Reserve space */
+    animation: fadeInUp 0.8s ease-out;
+}
+
+/* Loader */
+.splash-screen__loader {
+    width: 48px;
+    height: 48px;
+    border: 5px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: white;
+    animation: spin 1s ease-in-out infinite;
+    margin-top: 2rem;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes bounce {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-10px);
+    }
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 0.9;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeOut {
+    to {
+        opacity: 0;
+        visibility: hidden;
+    }
+}

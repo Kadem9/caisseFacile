@@ -1,0 +1,261 @@
+/* ===================================
+   Admin Layout Styles - Modern & Polish
+   =================================== */
+
+.admin-layout {
+    display: flex;
+    height: 100vh;
+    background-color: #f8fafc;
+    font-family: 'Inter', system-ui, sans-serif;
+    color: #1e293b;
+    /* Slate 800 */
+    overflow: hidden;
+}
+
+/* ===== Sidebar ===== */
+.admin-sidebar {
+    width: 280px;
+    /* Slightly wider for better breathing room */
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    border-right: 1px solid rgba(0, 0, 0, 0.06);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    z-index: 20;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.02);
+}
+
+.admin-sidebar__header {
+    padding: 2rem 1.5rem;
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.admin-sidebar__brand {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    width: 100%;
+}
+
+.admin-sidebar__logo-wrapper {
+    width: 48px;
+    height: 48px;
+    background: white;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    flex-shrink: 0;
+}
+
+.admin-sidebar__logo-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.admin-sidebar__app-name {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.admin-sidebar__app-name h1 {
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 0;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    letter-spacing: -0.02em;
+}
+
+.admin-sidebar__app-name span {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #64748b;
+    /* Slate 500 */
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.admin-sidebar__nav {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.admin-sidebar__section-title {
+    padding: 1.5rem 1rem 0.5rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #94a3b8;
+    /* Slate 400 */
+    letter-spacing: 0.1em;
+}
+
+.admin-sidebar__link {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.875rem 1rem;
+    text-decoration: none;
+    color: #64748b;
+    font-weight: 600;
+    font-size: 0.95rem;
+    border-radius: 12px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid transparent;
+}
+
+.admin-sidebar__link:hover {
+    background-color: #f1f5f9;
+    color: #1e293b;
+    transform: translateX(4px);
+}
+
+.admin-sidebar__link--active {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    color: white;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+}
+
+.admin-sidebar__link--active:hover {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    color: white;
+    transform: none;
+    opacity: 0.95;
+}
+
+.admin-sidebar__link svg {
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.admin-sidebar__link:hover svg {
+    opacity: 1;
+}
+
+.admin-sidebar__link--active svg {
+    opacity: 1;
+}
+
+.admin-sidebar__footer {
+    padding: 1.5rem;
+    border-top: 1px solid rgba(0, 0, 0, 0.04);
+    background-color: white;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.admin-sidebar__back-btn {
+    width: 100%;
+    padding: 0.875rem;
+    border: 1px solid #e2e8f0;
+    background-color: white;
+    color: #475569;
+    font-weight: 600;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+}
+
+.admin-sidebar__back-btn:hover {
+    border-color: #3b82f6;
+    color: #2563eb;
+    background-color: #eff6ff;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(37, 99, 235, 0.1);
+}
+
+/* User Profile in Sidebar */
+.admin-sidebar__user {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    transition: transform 0.2s ease;
+}
+
+.admin-sidebar__user:hover {
+    transform: translateY(-2px);
+    border-color: #cbd5e1;
+}
+
+.admin-sidebar__user-avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 1.1rem;
+    box-shadow: 0 4px 6px rgba(37, 99, 235, 0.2);
+    border: 2px solid white;
+}
+
+.admin-sidebar__user-info {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.admin-sidebar__user-info .name {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #1e293b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.admin-sidebar__user-info .role {
+    font-size: 0.75rem;
+    color: #64748b;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.admin-sidebar__user-info .role::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    background-color: #10b981;
+    /* Green dot for online status */
+    border-radius: 50%;
+    display: inline-block;
+}
+
+/* ===== Main Content Area ===== */
+.admin-main {
+    flex: 1;
+    overflow-y: auto;
+    padding: 2.5rem;
+    background-color: #f8fafc;
+    /* Dot pattern background */
+    background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
+    background-size: 24px 24px;
+}

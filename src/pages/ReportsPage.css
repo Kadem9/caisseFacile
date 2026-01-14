@@ -1,0 +1,425 @@
+/* ===================================
+   Reports Page - Reporting Dashboard
+   =================================== */
+
+.reports-page {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    background-color: var(--color-gray-50);
+    color: var(--text-primary);
+    overflow: hidden;
+}
+
+/* Header */
+.reports-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 2rem;
+    background: var(--color-white);
+    border-bottom: 1px solid var(--border-light);
+}
+
+.reports-header__left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.reports-header__back {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: var(--color-gray-100);
+    border: 1px solid var(--border-light);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 1.25rem;
+}
+
+.reports-header__back:hover {
+    background: var(--color-gray-200);
+    transform: translateX(-2px);
+}
+
+.reports-header__title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.reports-header__actions {
+    display: flex;
+    gap: 0.75rem;
+}
+
+/* Main Content */
+.reports-main {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem 2rem;
+}
+
+/* Stats Cards Grid */
+.reports-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.stat-card {
+    padding: 1.5rem;
+    border-radius: 16px;
+    background: var(--color-white);
+    border: 1px solid var(--border-light);
+    transition: all 0.2s ease;
+    box-shadow: var(--shadow-sm);
+}
+
+.stat-card:hover {
+    background: var(--color-white);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.stat-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+}
+
+.stat-card__icon {
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    font-size: 1.5rem;
+}
+
+.stat-card__icon--sales {
+    background: var(--color-success-light);
+    color: var(--color-success-dark);
+}
+
+.stat-card__icon--transactions {
+    background: var(--color-primary-light);
+    color: var(--color-primary);
+}
+
+.stat-card__icon--cash {
+    background: var(--color-warning-light);
+    color: var(--color-warning-dark);
+}
+
+.stat-card__icon--card {
+    background: var(--color-purple-light);
+    color: var(--color-purple);
+}
+
+.stat-card__trend {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.stat-card__trend--up {
+    background: var(--color-success-light);
+    color: var(--color-success-dark);
+}
+
+.stat-card__trend--down {
+    background: var(--color-danger-light);
+    color: var(--color-danger);
+}
+
+.stat-card__value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 0.25rem;
+}
+
+.stat-card__label {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+/* Reports Grid */
+.reports-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 1.5rem;
+}
+
+/* Section Card */
+.report-section {
+    background: var(--color-white);
+    border: 1px solid var(--border-light);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+}
+
+.report-section__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.report-section__title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.report-section__actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.report-section__filter {
+    padding: 0.375rem 0.75rem;
+    border-radius: 6px;
+    background: var(--color-gray-50);
+    border: 1px solid var(--border-light);
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.report-section__filter:hover,
+.report-section__filter--active {
+    background: var(--color-primary-light);
+    border-color: var(--color-primary);
+    color: var(--color-white);
+}
+
+.report-section__body {
+    padding: 1.5rem;
+}
+
+/* Chart */
+.chart-container {
+    height: 250px;
+    display: flex;
+    align-items: flex-end;
+    gap: 0.5rem;
+    padding: 1rem 0;
+}
+
+.chart-bar {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.chart-bar__bar {
+    width: 100%;
+    max-width: 40px;
+    border-radius: 6px 6px 0 0;
+    background: linear-gradient(180deg, var(--color-primary-light) 0%, var(--color-primary) 100%);
+    transition: all 0.3s ease;
+    min-height: 4px;
+}
+
+.chart-bar__bar:hover {
+    background: linear-gradient(180deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+    transform: scaleY(1.05);
+    transform-origin: bottom;
+}
+
+.chart-bar__label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.chart-bar__value {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* Transaction List */
+.transaction-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.transaction-item {
+    display: flex;
+    align-items: center;
+    padding: 0.875rem 1rem;
+    border-radius: 10px;
+    background: var(--color-gray-50);
+    border: 1px solid var(--border-light);
+    transition: all 0.2s ease;
+}
+
+.transaction-item:hover {
+    background: var(--color-white);
+    border-color: var(--color-primary);
+}
+
+.transaction-item__icon {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    margin-right: 0.75rem;
+    font-size: 1rem;
+}
+
+.transaction-item__icon--cash {
+    background: var(--color-warning-light);
+    color: var(--color-warning-dark);
+}
+
+.transaction-item__icon--card {
+    background: var(--color-purple-light);
+    color: var(--color-purple);
+}
+
+.transaction-item__icon--mixed {
+    background: var(--color-primary-light);
+    color: var(--color-primary);
+}
+
+.transaction-item__info {
+    flex: 1;
+}
+
+.transaction-item__id {
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.transaction-item__time {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 0.125rem;
+}
+
+.transaction-item__amount {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--color-success);
+}
+
+/* Top Products */
+.top-products {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.top-product {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.top-product__rank {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: var(--color-gray-100);
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+}
+
+.top-product__rank--1 {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: white;
+}
+
+.top-product__rank--2 {
+    background: linear-gradient(135deg, #94a3b8 0%, #64748b 100%);
+    color: white;
+}
+
+.top-product__rank--3 {
+    background: linear-gradient(135deg, #cd7f32 0%, #a16207 100%);
+    color: white;
+}
+
+.top-product__info {
+    flex: 1;
+}
+
+.top-product__name {
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.top-product__sales {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 0.125rem;
+}
+
+.top-product__revenue {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--color-success);
+}
+
+/* Empty State */
+.reports-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem;
+    text-align: center;
+}
+
+.reports-empty__icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+.reports-empty__text {
+    font-size: 0.9375rem;
+    color: var(--text-secondary);
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+    .reports-stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .reports-grid {
+        grid-template-columns: 1fr;
+    }
+}

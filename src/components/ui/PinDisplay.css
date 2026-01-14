@@ -1,0 +1,50 @@
+/* ===================================
+   PIN Display Component Styles
+   =================================== */
+
+.pin-display {
+    display: flex;
+    justify-content: center;
+    gap: var(--spacing-4);
+    padding: var(--spacing-6) 0;
+}
+
+.pin-display__dot {
+    width: 24px;
+    height: 24px;
+    border-radius: var(--radius-full);
+    background-color: var(--color-gray-300);
+    border: 3px solid var(--color-gray-400);
+    transition: all var(--transition-fast);
+}
+
+.pin-display__dot--filled {
+    background-color: var(--color-primary);
+    border-color: var(--color-primary-dark);
+    transform: scale(1.1);
+}
+
+/* Error state */
+.pin-display--error .pin-display__dot--filled {
+    background-color: var(--color-danger);
+    border-color: var(--color-danger-hover);
+    animation: shake 0.4s ease-in-out;
+}
+
+@keyframes shake {
+
+    0%,
+    100% {
+        transform: translateX(0) scale(1.1);
+    }
+
+    20%,
+    60% {
+        transform: translateX(-8px) scale(1.1);
+    }
+
+    40%,
+    80% {
+        transform: translateX(8px) scale(1.1);
+    }
+}

@@ -1,0 +1,308 @@
+/* ===================================
+   Settings Page Styles
+   =================================== */
+
+.settings-page {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    background-color: var(--color-gray-50);
+    color: var(--text-primary);
+}
+
+/* ===== Header ===== */
+.settings-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 2rem;
+    background: var(--color-white);
+    border-bottom: 1px solid var(--border-light);
+}
+
+.settings-header__left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.settings-header__back {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-gray-100);
+    border: 1px solid var(--border-light);
+    border-radius: 10px;
+    color: var(--text-primary);
+    font-size: 1.25rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.settings-header__back:hover {
+    background: var(--color-gray-200);
+}
+
+.settings-header__title {
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+/* ===== Main ===== */
+.settings-main {
+    flex: 1;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem;
+    width: 100%;
+}
+
+/* ===== Tabs ===== */
+.settings-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.settings-tab {
+    padding: 0.75rem 1.5rem;
+    background: var(--color-white);
+    border: 1px solid var(--border-light);
+    border-radius: 10px;
+    color: var(--text-secondary);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.settings-tab:hover {
+    background: var(--color-gray-100);
+    color: var(--text-primary);
+}
+
+.settings-tab--active {
+    background: var(--color-primary-light);
+    border-color: var(--color-primary);
+    color: var(--color-white);
+}
+
+/* ===== Content ===== */
+.settings-content {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+/* ===== Alert ===== */
+.settings-alert {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    border-radius: 12px;
+    font-size: 0.9375rem;
+    font-weight: 500;
+}
+
+.settings-alert--success {
+    background: var(--color-success-light);
+    border: 1px solid var(--color-success);
+    color: var(--color-success-dark);
+}
+
+.settings-alert--error {
+    background: var(--color-danger-light);
+    border: 1px solid var(--color-danger);
+    color: var(--color-danger);
+}
+
+.settings-alert__close {
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: inherit;
+    font-size: 1.25rem;
+    cursor: pointer;
+    opacity: 0.7;
+}
+
+.settings-alert__close:hover {
+    opacity: 1;
+}
+
+/* ===== Section ===== */
+.settings-section {
+    background: var(--color-white);
+    border: 1px solid var(--border-light);
+    border-radius: 16px;
+    padding: 1.5rem;
+    box-shadow: var(--shadow-sm);
+}
+
+.settings-section__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+}
+
+.settings-section__header h2 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+/* ===== Form ===== */
+.settings-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.settings-form__group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.settings-form__group label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.settings-form__group select,
+.settings-form__group input {
+    padding: 0.75rem 1rem;
+    background: var(--color-gray-50);
+    border: 1px solid var(--border-light);
+    border-radius: 10px;
+    color: var(--text-primary);
+    font-size: 1rem;
+    transition: all 0.2s ease;
+}
+
+.settings-form__group select:focus,
+.settings-form__group input:focus {
+    outline: none;
+    background: var(--color-white);
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-light);
+}
+
+.settings-form__group select option {
+    background: var(--color-white);
+    color: var(--text-primary);
+}
+
+.settings-form__info {
+    padding: 1rem;
+    background: var(--color-primary-light);
+    border: 1px solid var(--color-primary-light);
+    border-radius: 10px;
+}
+
+.settings-form__info p {
+    font-size: 0.875rem;
+    color: var(--color-primary-dark);
+    line-height: 1.5;
+    margin: 0;
+}
+
+.settings-form__actions {
+    display: flex;
+    gap: 1rem;
+    padding-top: 1rem;
+}
+
+/* ===== Radio Group ===== */
+.settings-radio-group {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.settings-radio {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    background: var(--color-gray-50);
+    border: 1px solid var(--border-light);
+    border-radius: 10px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-weight: 500;
+}
+
+.settings-radio input {
+    display: none;
+}
+
+.settings-radio:hover {
+    background: var(--color-gray-100);
+}
+
+.settings-radio--active {
+    background: var(--color-primary-light);
+    border-color: var(--color-primary);
+    color: var(--color-primary-dark);
+}
+
+/* ===== Status ===== */
+.settings-status {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border-light);
+}
+
+.settings-status__indicator {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9375rem;
+    color: var(--text-secondary);
+}
+
+.settings-status__dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--color-danger);
+}
+
+.settings-status__indicator--connected .settings-status__dot {
+    background: var(--color-success);
+    box-shadow: 0 0 10px var(--color-success-light);
+}
+
+.settings-status__indicator--connected {
+    color: var(--color-success-dark);
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 768px) {
+    .settings-main {
+        padding: 1rem;
+    }
+
+    .settings-tabs {
+        overflow-x: auto;
+        padding-bottom: 0.75rem;
+    }
+
+    .settings-tab {
+        white-space: nowrap;
+        padding: 0.625rem 1rem;
+        font-size: 0.875rem;
+    }
+
+    .settings-radio-group {
+        flex-direction: column;
+    }
+}

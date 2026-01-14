@@ -1,0 +1,309 @@
+/* ===================================
+   Button Component Styles (Light Theme)
+   Large touch-friendly buttons for POS
+   =================================== */
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    font-family: var(--font-family);
+    font-size: 1rem;
+    font-weight: 500;
+    line-height: 1.25;
+    text-decoration: none;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-height: 44px;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn:active:not(:disabled) {
+    transform: scale(0.98);
+}
+
+/* ===== Button Variants ===== */
+
+/* Primary Button */
+.btn--primary {
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+    color: white;
+    box-shadow: 0 4px 6px rgba(99, 102, 241, 0.25);
+    border: 1px solid transparent;
+}
+
+.btn--primary:hover:not(:disabled) {
+    box-shadow: 0 6px 12px rgba(99, 102, 241, 0.35);
+    background: linear-gradient(135deg, var(--color-primary-light) 0%, var(--color-primary) 100%);
+    transform: translateY(-1px);
+}
+
+/* Secondary Button */
+.btn--secondary {
+    background: var(--color-white);
+    border: 1px solid var(--border-medium);
+    color: var(--text-secondary);
+    box-shadow: var(--shadow-sm);
+}
+
+.btn--secondary:hover:not(:disabled) {
+    background: var(--color-gray-50);
+    border-color: var(--color-secondary);
+    color: var(--text-primary);
+}
+
+/* Accent Button */
+.btn--accent {
+    background: linear-gradient(135deg, var(--color-accent) 0%, #059669 100%);
+    color: white;
+    box-shadow: 0 4px 6px rgba(16, 185, 129, 0.25);
+}
+
+.btn--accent:hover:not(:disabled) {
+    box-shadow: 0 6px 12px rgba(16, 185, 129, 0.35);
+    transform: translateY(-1px);
+}
+
+/* Danger Button */
+.btn--danger {
+    background: linear-gradient(135deg, var(--color-danger) 0%, var(--color-danger-hover) 100%);
+    color: white;
+    box-shadow: 0 4px 6px rgba(239, 68, 68, 0.25);
+}
+
+.btn--danger:hover:not(:disabled) {
+    box-shadow: 0 6px 12px rgba(239, 68, 68, 0.35);
+    transform: translateY(-1px);
+}
+
+/* Ghost Button */
+.btn--ghost {
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid transparent;
+}
+
+.btn--ghost:hover:not(:disabled) {
+    background: var(--color-gray-100);
+    color: var(--text-primary);
+}
+
+/* ===== Button Sizes ===== */
+
+.btn--sm {
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    min-height: 36px;
+}
+
+.btn--lg {
+    padding: 1rem 2rem;
+    font-size: 1.125rem;
+    min-height: 56px;
+}
+
+.btn--xl {
+    padding: 1.25rem 2.5rem;
+    font-size: 1.5rem;
+    min-height: 64px;
+    border-radius: 12px;
+}
+
+/* ===== Special POS Buttons ===== */
+
+/* Product Button (Square) */
+.btn--product {
+    flex-direction: column;
+    width: 130px;
+    height: 140px;
+    padding: var(--spacing-3);
+    font-size: 0.875rem;
+    border-radius: var(--radius-xl);
+    background: var(--color-white);
+    border: 1px solid var(--border-light);
+    color: var(--text-primary);
+    box-shadow: var(--shadow-sm);
+    position: relative;
+    overflow: hidden;
+    /* Back to hidden to prevent layout issues */
+    display: flex;
+    align-items: center;
+}
+
+.btn--product:hover:not(:disabled) {
+    border-color: var(--color-primary-light);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.btn--product:active:not(:disabled) {
+    transform: translateY(0) scale(0.98);
+}
+
+.btn--product__visual {
+    width: 100%;
+    height: 70px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--color-gray-50);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    margin-bottom: var(--spacing-2);
+    flex-shrink: 0;
+}
+
+.btn--product__image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    /* Cover ensures same dimension without stretching */
+}
+
+.btn--product__icon {
+    font-size: 1.75rem;
+    color: var(--color-primary);
+    display: flex;
+}
+
+.btn--product__name {
+    font-weight: 600;
+    font-size: 0.8125rem;
+    line-height: 1.3;
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    color: var(--text-primary);
+    z-index: 1;
+    width: 100%;
+    flex-shrink: 0;
+    /* Prevent name from being compressed */
+}
+
+.btn--product__price {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: var(--color-primary);
+    margin-top: auto;
+    flex-shrink: 0;
+}
+
+.btn--product__badge {
+    position: absolute;
+    top: var(--spacing-2);
+    right: var(--spacing-2);
+    padding: var(--spacing-1) var(--spacing-2);
+    border-radius: var(--radius-md);
+    font-size: 0.625rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    z-index: 2;
+}
+
+.btn--product__badge--warning {
+    background-color: var(--color-warning);
+    color: var(--color-white);
+}
+
+.btn--product__badge--danger {
+    background-color: var(--color-danger);
+    color: var(--color-white);
+}
+
+/* Numpad Key */
+.btn--numpad {
+    width: 72px;
+    height: 72px;
+    font-size: 1.5rem;
+    font-weight: 600;
+    border-radius: 12px;
+    background: var(--color-white);
+    border: 1px solid var(--border-medium);
+    color: var(--text-primary);
+    box-shadow: var(--shadow-sm);
+}
+
+.btn--numpad:hover:not(:disabled) {
+    background: var(--color-gray-50);
+}
+
+.btn--numpad:active:not(:disabled) {
+    background: var(--color-gray-100);
+}
+
+.btn--numpad--action {
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+    border-color: transparent;
+    color: white;
+}
+
+.btn--numpad--action:hover:not(:disabled) {
+    box-shadow: 0 4px 6px rgba(99, 102, 241, 0.25);
+    background: linear-gradient(135deg, var(--color-primary-light) 0%, var(--color-primary) 100%);
+}
+
+.btn--numpad--danger {
+    background: linear-gradient(135deg, var(--color-danger) 0%, var(--color-danger-hover) 100%);
+    border-color: transparent;
+    color: white;
+}
+
+/* Category Tab Button */
+.btn--category {
+    padding: 0.625rem 1.25rem;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    border-radius: 8px;
+    background: var(--color-white);
+    border: 1px solid var(--border-medium);
+    color: var(--text-secondary);
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    box-shadow: var(--shadow-sm);
+}
+
+.btn--category:hover:not(:disabled) {
+    background: var(--color-gray-50);
+    color: var(--text-primary);
+    border-color: var(--color-gray-400);
+}
+
+.btn--category--active {
+    background: var(--color-primary);
+    border-color: transparent;
+    color: white;
+    box-shadow: 0 4px 6px rgba(99, 102, 241, 0.25);
+}
+
+/* ===== Full Width Button ===== */
+.btn--block {
+    width: 100%;
+}
+
+/* ===== Icon Only Button ===== */
+.btn--icon {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border-radius: 10px;
+}
+
+.btn--icon svg {
+    width: 24px;
+    height: 24px;
+}

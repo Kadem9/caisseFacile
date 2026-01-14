@@ -1,0 +1,373 @@
+// ===================================
+// Settings Page - Hardware Configuration
+// ===================================
+
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { invoke } from '@tauri-apps/api/core';
+import { Button } from '../components/ui';
+import './SettingsPage.css';
+
+interface SerialPortInfo {
+    name: string;
+    port_type: string;
+    manufacturer: string | null;
+    product: string | null;
+}
+
+interface HardwareStatus {
+    printer_connected: boolean;
+    printer_port: string | null;
+    drawer_connected: boolean;
+    drawer_port: string | null;
+}
+
+interface HardwareConfig {
+    printerPort: string;
+    printerBaudRate: number;
+    paperWidth: number;
+    drawerPort: string;
+    drawerPin: number;
+}
+
+const DEFAULT_CONFIG: HardwareConfig = {
+    printerPort: '',
+    printerBaudRate: 9600,
+    paperWidth: 80,
+    drawerPort: '',
+    drawerPin: 0,
+};
+
+const BAUD_RATES = [9600, 19200, 38400, 57600, 115200];
+
+export const SettingsPage: React.FC = () => {
+    const navigate = useNavigate();
+
+    // State
+    const [ports, setPorts] = useState<SerialPortInfo[]>([]);
+    const [config, setConfig] = useState<HardwareConfig>(() => {
+        const saved = localStorage.getItem('ma-caisse-hardware-config');
+        return saved ? JSON.parse(saved) : DEFAULT_CONFIG;
+    });
+    const [status, setStatus] = useState<HardwareStatus | null>(null);
+    const [isScanning, setIsScanning] = useState(false);
+    const [testResult, setTestResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+    const [activeTab, setActiveTab] = useState<'printer' | 'drawer' | 'sync'>('printer');
+
+    // Load configuration on mount
+    useEffect(() => {
+        scanPorts();
+        checkStatus();
+    }, []);
+
+    // Save configuration when it changes
+    useEffect(() => {
+        localStorage.setItem('ma-caisse-hardware-config', JSON.stringify(config));
+    }, [config]);
+
+    const scanPorts = useCallback(async () => {
+        setIsScanning(true);
+        try {
+            const result = await invoke<SerialPortInfo[]>('list_serial_ports');
+            setPorts(result);
+        } catch (err) {
+            console.error('Failed to scan ports:', err);
+            setPorts([]);
+        } finally {
+            setIsScanning(false);
+        }
+    }, []);
+
+    const checkStatus = useCallback(async () => {
+        try {
+            const result = await invoke<HardwareStatus>('check_hardware_status', {
+                printerPort: config.printerPort || null,
+                drawerPort: config.drawerPort || null,
+            });
+            setStatus(result);
+        } catch (err) {
+            console.error('Failed to check status:', err);
+        }
+    }, [config.printerPort, config.drawerPort]);
+
+    const handleTestPrinter = useCallback(async () => {
+        if (!config.printerPort) {
+            setTestResult({ type: 'error', message: 'Sélectionnez un port imprimante' });
+            return;
+        }
+
+        setTestResult(null);
+        try {
+            const result = await invoke<string>('test_printer', {
+                portName: config.printerPort,
+                baudRate: config.printerBaudRate,
+            });
+            setTestResult({ type: 'success', message: result });
+        } catch (err) {
+            setTestResult({ type: 'error', message: String(err) });
+        }
+    }, [config.printerPort, config.printerBaudRate]);
+
+    const handleOpenDrawer = useCallback(async () => {
+        const port = config.drawerPort || config.printerPort;
+        if (!port) {
+            setTestResult({ type: 'error', message: 'Sélectionnez un port' });
+            return;
+        }
+
+        setTestResult(null);
+        try {
+            const result = await invoke<string>('open_cash_drawer', {
+                portName: port,
+                baudRate: config.printerBaudRate,
+                pin: config.drawerPin,
+            });
+            setTestResult({ type: 'success', message: result });
+        } catch (err) {
+            setTestResult({ type: 'error', message: String(err) });
+        }
+    }, [config.drawerPort, config.printerPort, config.printerBaudRate, config.drawerPin]);
+
+    const handleBack = useCallback(() => {
+        navigate('/pos');
+    }, [navigate]);
+
+    return (
+        <div className="settings-page">
+            {/* Header */}
+            <header className="settings-header">
+                <div className="settings-header__left">
+                    <button className="settings-header__back" onClick={handleBack} type="button">
+                        ←
+                    </button>
+                    <h1 className="settings-header__title">⚙️ Paramètres</h1>
+                </div>
+            </header>
+
+            <main className="settings-main">
+                {/* Tabs */}
+                <nav className="settings-tabs">
+                    <button
+                        className={`settings-tab ${activeTab === 'printer' ? 'settings-tab--active' : ''}`}
+                        onClick={() => setActiveTab('printer')}
+                        type="button"
+                    >
+                        🖨️ Imprimante
+                    </button>
+                    <button
+                        className={`settings-tab ${activeTab === 'drawer' ? 'settings-tab--active' : ''}`}
+                        onClick={() => setActiveTab('drawer')}
+                        type="button"
+                    >
+                        💰 Tiroir-caisse
+                    </button>
+                    <button
+                        className={`settings-tab ${activeTab === 'sync' ? 'settings-tab--active' : ''}`}
+                        onClick={() => setActiveTab('sync')}
+                        type="button"
+                    >
+                        🔄 Synchronisation
+                    </button>
+                </nav>
+
+                {/* Content */}
+                <div className="settings-content">
+                    {/* Test Result Alert */}
+                    {testResult && (
+                        <div className={`settings-alert settings-alert--${testResult.type}`}>
+                            {testResult.type === 'success' ? '✅' : '❌'} {testResult.message}
+                            <button
+                                className="settings-alert__close"
+                                onClick={() => setTestResult(null)}
+                                type="button"
+                            >
+                                ×
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Printer Tab */}
+                    {activeTab === 'printer' && (
+                        <div className="settings-section">
+                            <div className="settings-section__header">
+                                <h2>Configuration Imprimante</h2>
+                                <Button variant="ghost" size="sm" onClick={scanPorts} disabled={isScanning}>
+                                    {isScanning ? '⏳ Scan...' : '🔍 Scanner les ports'}
+                                </Button>
+                            </div>
+
+                            <div className="settings-form">
+                                <div className="settings-form__group">
+                                    <label>Port série</label>
+                                    <select
+                                        value={config.printerPort}
+                                        onChange={(e) => setConfig({ ...config, printerPort: e.target.value })}
+                                    >
+                                        <option value="">-- Sélectionner --</option>
+                                        {ports.map((port) => (
+                                            <option key={port.name} value={port.name}>
+                                                {port.name} ({port.port_type})
+                                                {port.product && ` - ${port.product}`}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="settings-form__group">
+                                    <label>Vitesse (baud rate)</label>
+                                    <select
+                                        value={config.printerBaudRate}
+                                        onChange={(e) => setConfig({ ...config, printerBaudRate: Number(e.target.value) })}
+                                    >
+                                        {BAUD_RATES.map((rate) => (
+                                            <option key={rate} value={rate}>
+                                                {rate}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="settings-form__group">
+                                    <label>Largeur papier</label>
+                                    <div className="settings-radio-group">
+                                        <label className={`settings-radio ${config.paperWidth === 58 ? 'settings-radio--active' : ''}`}>
+                                            <input
+                                                type="radio"
+                                                name="paperWidth"
+                                                value="58"
+                                                checked={config.paperWidth === 58}
+                                                onChange={() => setConfig({ ...config, paperWidth: 58 })}
+                                            />
+                                            58mm
+                                        </label>
+                                        <label className={`settings-radio ${config.paperWidth === 80 ? 'settings-radio--active' : ''}`}>
+                                            <input
+                                                type="radio"
+                                                name="paperWidth"
+                                                value="80"
+                                                checked={config.paperWidth === 80}
+                                                onChange={() => setConfig({ ...config, paperWidth: 80 })}
+                                            />
+                                            80mm
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div className="settings-form__actions">
+                                    <Button variant="secondary" onClick={handleTestPrinter}>
+                                        🧪 Tester l'impression
+                                    </Button>
+                                </div>
+                            </div>
+
+                            {/* Status */}
+                            <div className="settings-status">
+                                <div className={`settings-status__indicator ${status?.printer_connected ? 'settings-status__indicator--connected' : ''}`}>
+                                    <span className="settings-status__dot" />
+                                    <span>{status?.printer_connected ? 'Imprimante connectée' : 'Non connectée'}</span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Drawer Tab */}
+                    {activeTab === 'drawer' && (
+                        <div className="settings-section">
+                            <div className="settings-section__header">
+                                <h2>Configuration Tiroir-caisse</h2>
+                            </div>
+
+                            <div className="settings-form">
+                                <div className="settings-form__info">
+                                    <p>
+                                        💡 La plupart des tiroirs-caisse sont connectés via l'imprimante.
+                                        Si c'est votre cas, laissez le port vide - le tiroir utilisera
+                                        le port de l'imprimante.
+                                    </p>
+                                </div>
+
+                                <div className="settings-form__group">
+                                    <label>Port série (optionnel)</label>
+                                    <select
+                                        value={config.drawerPort}
+                                        onChange={(e) => setConfig({ ...config, drawerPort: e.target.value })}
+                                    >
+                                        <option value="">Via imprimante</option>
+                                        {ports.map((port) => (
+                                            <option key={port.name} value={port.name}>
+                                                {port.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="settings-form__group">
+                                    <label>Pin de déclenchement</label>
+                                    <div className="settings-radio-group">
+                                        <label className={`settings-radio ${config.drawerPin === 0 ? 'settings-radio--active' : ''}`}>
+                                            <input
+                                                type="radio"
+                                                name="drawerPin"
+                                                value="0"
+                                                checked={config.drawerPin === 0}
+                                                onChange={() => setConfig({ ...config, drawerPin: 0 })}
+                                            />
+                                            Pin 2 (standard)
+                                        </label>
+                                        <label className={`settings-radio ${config.drawerPin === 5 ? 'settings-radio--active' : ''}`}>
+                                            <input
+                                                type="radio"
+                                                name="drawerPin"
+                                                value="5"
+                                                checked={config.drawerPin === 5}
+                                                onChange={() => setConfig({ ...config, drawerPin: 5 })}
+                                            />
+                                            Pin 5
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div className="settings-form__actions">
+                                    <Button variant="secondary" onClick={handleOpenDrawer}>
+                                        🔓 Tester le tiroir
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Sync Tab */}
+                    {activeTab === 'sync' && (
+                        <div className="settings-section">
+                            <div className="settings-section__header">
+                                <h2>Configuration Synchronisation</h2>
+                            </div>
+
+                            <div className="settings-form">
+                                <div className="settings-form__group">
+                                    <label>URL du serveur</label>
+                                    <input
+                                        type="url"
+                                        placeholder="http://localhost:3001"
+                                        defaultValue={localStorage.getItem('ma-caisse-api-url') || 'http://localhost:3001'}
+                                        onChange={(e) => localStorage.setItem('ma-caisse-api-url', e.target.value)}
+                                    />
+                                </div>
+
+                                <div className="settings-form__info">
+                                    <p>
+                                        📡 Le serveur backend permet de synchroniser les données
+                                        vers un dashboard distant. Assurez-vous que le serveur est
+                                        accessible à l'adresse indiquée.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </main>
+        </div>
+    );
+};
+
+export default SettingsPage;

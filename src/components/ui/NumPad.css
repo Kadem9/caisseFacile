@@ -1,0 +1,31 @@
+/* ===================================
+   NumPad Component Styles
+   =================================== */
+
+.numpad {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-4);
+    width: 100%;
+    max-width: 300px;
+    margin: 0 auto;
+}
+
+.numpad__grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--spacing-3);
+}
+
+.numpad__confirm {
+    margin-top: var(--spacing-4);
+}
+
+/* Animation for button press */
+.numpad .btn--numpad {
+    transition: all var(--transition-fast);
+}
+
+.numpad .btn--numpad:active:not(:disabled) {
+    transform: scale(0.95);
+}
