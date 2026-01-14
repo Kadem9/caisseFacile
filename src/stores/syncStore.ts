@@ -187,7 +187,6 @@ export const useSyncStore = create<SyncState>()(
                     const { ts, products, menus } = result;
 
                     const imageCache = useImageCacheStore.getState();
-                    const apiUrl = getApiUrl();
 
                     if (products && products.length > 0) {
                         // Use registered handler
