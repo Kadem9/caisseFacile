@@ -29,7 +29,7 @@
           "url": "http://localhost:3001/**"
         },
         {
-          "url": "http://54.36.98.249:3001/**"
+          "url": "https://api.caissefacile.asmanissieux.fr/**"
         },
         {
           "url": "https://github.com/Kadem9/caisseFacile/**"

@@ -20,7 +20,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self' 'unsafe-inline' 'unsafe-eval'; img-src 'self' http://localhost:3001 http://54.36.98.249:3001 asset: blob: data: https://placehold.co; connect-src 'self' http://localhost:3001 http://54.36.98.249:3001 https://github.com https://api.github.com;",
+      "csp": "default-src 'self' 'unsafe-inline' 'unsafe-eval'; img-src 'self' http://localhost:3001 https://api.caissefacile.asmanissieux.fr asset: blob: data: https://placehold.co; connect-src 'self' http://localhost:3001 https://api.caissefacile.asmanissieux.fr https://github.com https://api.github.com;",
       "assetProtocol": {
         "scope": [
           "$APPLOCALDATA/**",
