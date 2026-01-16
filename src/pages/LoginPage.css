@@ -226,13 +226,46 @@
 /* Footer */
 .login-page__footer {
     text-align: center;
-    padding: 1rem 2rem;
+    padding: 0.75rem 2rem;
     background: #eee;
     color: #888;
-    font-size: 0.8rem;
-    font-weight: 500;
     border-top: 1px solid #ddd;
 }
+
+.login-page__footer-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.login-page__footer-content p {
+    font-size: 0.8rem;
+    font-weight: 500;
+    margin: 0;
+}
+
+.login-page__shutdown-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: transparent;
+    border: none;
+    color: #666;
+    font-size: 0.875rem;
+    font-weight: 600;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.login-page__shutdown-btn:hover {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
 
 /* Animation */
 @keyframes fadeIn {

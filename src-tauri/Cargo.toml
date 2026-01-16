@@ -30,3 +30,4 @@ serde_json = "1"
 # Hardware integration
 serialport = "4.3"
 printers = "2.2"
+system_shutdown = "4.0"

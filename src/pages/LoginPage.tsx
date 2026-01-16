@@ -4,8 +4,10 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { invoke } from '@tauri-apps/api/core';
+import { confirm } from '@tauri-apps/plugin-dialog';
 import { UserCard } from '../components/auth';
-import { NumPad, PinDisplay } from '../components/ui';
+import { NumPad, PinDisplay, PowerIcon } from '../components/ui';
 import { useAuthStore } from '../stores';
 import { fetchUsers, getApiUrl } from '../services/api';
 import type { User } from '../types';
@@ -97,6 +99,22 @@ export const LoginPage: React.FC = () => {
         setSelectedUser(null);
         setPin('');
         setIsError(false);
+    }, []);
+
+    const handleShutdown = useCallback(async () => {
+        const confirmed = await confirm(
+            'Voulez-vous vraiment éteindre la caisse et l\'ordinateur ?',
+            { title: 'Fermeture de la caisse', kind: 'warning' }
+        );
+
+        if (confirmed) {
+            try {
+                await invoke('shutdown_system');
+            } catch (error) {
+                console.error('Failed to shutdown:', error);
+                alert('Erreur lors de l\'arrêt du système: ' + error);
+            }
+        }
     }, []);
 
     return (
@@ -197,7 +215,18 @@ export const LoginPage: React.FC = () => {
                 </main>
 
                 <footer className="login-page__footer">
-                    <p>CaisseFacile © 2026 - Développé par Kadem</p>
+                    <div className="login-page__footer-content">
+                        <button
+                            className="login-page__shutdown-btn"
+                            onClick={handleShutdown}
+                            type="button"
+                            title="Éteindre la caisse"
+                        >
+                            <PowerIcon size={18} />
+                            <span>Fermer la caisse</span>
+                        </button>
+                        <p>CaisseFacile © 2026 - Développé par Kadem</p>
+                    </div>
                 </footer>
             </div>
         </div>

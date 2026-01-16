@@ -19,6 +19,14 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
+#[tauri::command]
+fn shutdown_system() -> Result<(), String> {
+    match system_shutdown::shutdown() {
+        Ok(_) => Ok(()),
+        Err(e) => Err(format!("Failed to shutdown: {}", e)),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -38,6 +46,7 @@ pub fn run() {
             print_via_driver,
             open_drawer_via_driver,
             test_printer_driver,
+            shutdown_system,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
