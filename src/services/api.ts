@@ -1,8 +1,7 @@
 // ===================================
 // API Service - HTTP Client Configuration
 // ===================================
-// Use native fetch for better compatibility with standard build tools
-const fetch = window.fetch;
+import { fetch } from '@tauri-apps/plugin-http';
 
 export const DEFAULT_API_URL = 'https://api.caissefacile.asmanissieux.fr';
 
