@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useProductStore } from '../stores';
-import { PackageIcon, EditIcon, TrashIcon, SearchIcon, PlusIcon, AlertIcon, XIcon, CheckIcon } from '../components/ui';
+import { PackageIcon, TrashIcon, SearchIcon, PlusIcon, AlertIcon, XIcon, CheckIcon } from '../components/ui';
 import { getProductImageUrl } from '../helpers/urlHelper';
 import type { Product, ProductCreateInput } from '../types';
 import { ask } from '@tauri-apps/plugin-dialog';

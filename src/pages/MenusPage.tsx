@@ -4,7 +4,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { useMenuStore, useProductStore } from '../stores';
-import { PackageIcon, PlusIcon, EditIcon, TrashIcon, CheckIcon, XIcon, SearchIcon, HamburgerIcon } from '../components/ui';
+import { PlusIcon, TrashIcon, CheckIcon, XIcon, SearchIcon, HamburgerIcon } from '../components/ui';
 import type { Menu, MenuCreateInput } from '../types';
 import { getProductImageUrl } from '../helpers/urlHelper';
 import { ask } from '@tauri-apps/plugin-dialog';

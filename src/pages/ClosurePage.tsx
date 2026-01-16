@@ -6,7 +6,6 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Button,
-    ArrowLeftIcon,
     CircleIcon,
     ChartIcon,
     CashIcon,

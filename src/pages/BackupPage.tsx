@@ -3,10 +3,8 @@
 // ===================================
 
 import React, { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
     Button,
-    ArrowLeftIcon,
     DownloadIcon,
     FileIcon,
     HistoryIcon,
@@ -34,7 +32,6 @@ import autoTable from 'jspdf-autotable';
 import './BackupPage.css';
 
 export const BackupPage: React.FC = () => {
-    const navigate = useNavigate();
     const { transactions } = useTransactionStore();
     const { products, categories } = useProductStore();
     const { menus } = useMenuStore();
@@ -49,9 +46,6 @@ export const BackupPage: React.FC = () => {
         setTimeout(() => setNotification(null), 5000);
     }, []);
 
-    const handleBack = useCallback(() => {
-        navigate('/admin/dashboard');
-    }, [navigate]);
 
     // Format current date for filenames
     const dateStr = format(new Date(), 'yyyy-MM-dd');

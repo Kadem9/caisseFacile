@@ -3,7 +3,6 @@
 // ===================================
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
     Button,
     PackageIcon,
@@ -18,7 +17,6 @@ import './StockPage.css';
 type FilterType = 'all' | 'low' | 'critical';
 
 export const StockPage: React.FC = () => {
-    const navigate = useNavigate();
     const { currentUser } = useAuthStore();
     const { products, categories, updateStock } = useProductStore();
     const { addMovement, getMovementsByProduct } = useStockStore();
@@ -87,9 +85,6 @@ export const StockPage: React.FC = () => {
     );
 
     // Handlers
-    const handleBack = useCallback(() => {
-        navigate('/pos');
-    }, [navigate]);
 
     const getCategoryName = useCallback((categoryId: number) => {
         return categories.find(c => c.id === categoryId)?.name || '';

@@ -3,12 +3,9 @@
 // ===================================
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { invoke } from '@tauri-apps/api/core';
 import {
     Button,
-    ArrowLeftIcon,
-    SettingsIcon,
     PrinterIcon,
     DrawerIcon,
     SyncIcon,
@@ -73,7 +70,6 @@ const DEFAULT_CONFIG: HardwareConfig = {
 const BAUD_RATES = [9600, 19200, 38400, 57600, 115200];
 
 export const SettingsPage: React.FC = () => {
-    const navigate = useNavigate();
 
     // State
     const [ports, setPorts] = useState<SerialPortInfo[]>([]);
@@ -214,9 +210,6 @@ export const SettingsPage: React.FC = () => {
         }
     }, [config.connectionMode, config.systemPrinterName, config.drawerPort, config.printerPort, config.printerBaudRate, config.drawerPin]);
 
-    const handleBack = useCallback(() => {
-        navigate('/pos');
-    }, [navigate]);
 
     const handleCheckConnection = useCallback(async () => {
         setIsCheckingSync(true);

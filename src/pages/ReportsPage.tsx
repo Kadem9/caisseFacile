@@ -55,7 +55,15 @@ export const ReportsPage: React.FC = () => {
     }, []);
 
     // Use backend transactions if available, fallback to local
-    const transactions = (backendTransactions?.length ?? 0) > 0 ? backendTransactions : localTransactions;
+    const transactions = useMemo(() => {
+        if ((backendTransactions?.length ?? 0) > 0) {
+            return backendTransactions.map(t => ({
+                ...t,
+                items: [] as any[] // Add empty items to satisfy Transaction interface needs
+            })) as any[];
+        }
+        return localTransactions;
+    }, [backendTransactions, localTransactions]);
 
     const handleBack = useCallback(() => {
         navigate('/pos');
