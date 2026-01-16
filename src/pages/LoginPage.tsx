@@ -5,11 +5,13 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { invoke } from '@tauri-apps/api/core';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { confirm } from '@tauri-apps/plugin-dialog';
 import { UserCard } from '../components/auth';
-import { NumPad, PinDisplay, PowerIcon } from '../components/ui';
-import { useAuthStore } from '../stores';
+import { NumPad, PinDisplay, PowerIcon, XIcon } from '../components/ui';
+import { useAuthStore, useTransactionStore } from '../stores';
 import { fetchUsers, getApiUrl } from '../services/api';
+import { generateAndSaveDailyReport } from '../utils/autoBackup';
 import type { User } from '../types';
 import './LoginPage.css';
 import logoImg from '../assets/logo-asmsp.png';
@@ -19,6 +21,7 @@ const PIN_LENGTH = 4;
 export const LoginPage: React.FC = () => {
     const navigate = useNavigate();
     const { login } = useAuthStore();
+    const { transactions } = useTransactionStore();
 
     const [users, setUsers] = useState<User[]>([]);
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -26,6 +29,7 @@ export const LoginPage: React.FC = () => {
     const [isError, setIsError] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [loadError, setLoadError] = useState<string | null>(null);
+    const [backupStatus, setBackupStatus] = useState<string | null>(null);
 
     const loadUsers = useCallback(async () => {
         setIsLoading(true);
@@ -101,6 +105,31 @@ export const LoginPage: React.FC = () => {
         setIsError(false);
     }, []);
 
+    const performBackup = async () => {
+        setBackupStatus("Sauvegarde en cours...");
+        try {
+            await generateAndSaveDailyReport(transactions);
+            setBackupStatus("Sauvegarde réussie !");
+            return true;
+        } catch (error) {
+            console.error("Backup failed", error);
+            setBackupStatus("Erreur sauvegarde.");
+            // We proceed even if backup fails, but maybe log it?
+            return false;
+        }
+    };
+
+    const handleCloseApp = useCallback(async () => {
+        // No confirmation needed for simple close? Or maybe yes?
+        // User asked confirmation specifically for Shutdown.
+        // Let's keep close simple or maybe a small confirm via browser api or tauri
+        const confirmed = await confirm('Voulez-vous fermer l\'application ?', { title: 'Fermer', kind: 'info' });
+        if (!confirmed) return;
+
+        await performBackup();
+        await getCurrentWindow().close();
+    }, [transactions]);
+
     const handleShutdown = useCallback(async () => {
         const confirmed = await confirm(
             'Voulez-vous vraiment éteindre la caisse et l\'ordinateur ?',
@@ -108,6 +137,7 @@ export const LoginPage: React.FC = () => {
         );
 
         if (confirmed) {
+            await performBackup();
             try {
                 await invoke('shutdown_system');
             } catch (error) {
@@ -115,7 +145,7 @@ export const LoginPage: React.FC = () => {
                 alert('Erreur lors de l\'arrêt du système: ' + error);
             }
         }
-    }, []);
+    }, [transactions]);
 
     return (
         <div className="login-page">
@@ -216,21 +246,36 @@ export const LoginPage: React.FC = () => {
 
                 <footer className="login-page__footer">
                     <div className="login-page__footer-content">
-                        <button
-                            className="login-page__shutdown-btn"
-                            onClick={handleShutdown}
-                            type="button"
-                            title="Éteindre la caisse"
-                        >
-                            <PowerIcon size={18} />
-                            <span>Fermer la caisse</span>
-                        </button>
-                        <p>CaisseFacile © 2026 - Développé par Kadem</p>
+                        {backupStatus && (
+                            <span className="backup-status-pill">{backupStatus}</span>
+                        )}
+                        <div className="login-page__actions-group">
+                            <button
+                                className="login-page__action-btn"
+                                onClick={handleCloseApp}
+                                type="button"
+                                title="Fermer la caisse (Application)"
+                            >
+                                <XIcon size={18} />
+                                <span>Fermer l'app</span>
+                            </button>
+                            <button
+                                className="login-page__action-btn login-page__action-btn--danger"
+                                onClick={handleShutdown}
+                                type="button"
+                                title="Éteindre l'ordinateur"
+                            >
+                                <PowerIcon size={18} />
+                                <span>Éteindre</span>
+                            </button>
+                        </div>
                     </div>
+                    <p className="login-page__copyright">CaisseFacile © 2026</p>
                 </footer>
             </div>
         </div>
     );
 };
+
 
 export default LoginPage;

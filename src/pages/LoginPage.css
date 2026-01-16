@@ -240,10 +240,55 @@
     margin: 0 auto;
 }
 
-.login-page__footer-content p {
+.login-page__actions-group {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+.login-page__action-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: transparent;
+    border: 1px solid #e2e8f0;
+    color: #64748b;
+    font-size: 0.875rem;
+    font-weight: 600;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.login-page__action-btn:hover {
+    background: #f1f5f9;
+    color: #334155;
+    border-color: #cbd5e1;
+}
+
+.login-page__action-btn--danger:hover {
+    background: #fee2e2;
+    color: #dc2626;
+    border-color: #fecaca;
+    border-style: solid;
+}
+
+.backup-status-pill {
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    background: #e0f2fe;
+    color: #0369a1;
+    border-radius: 12px;
+    font-weight: 600;
+    animation: fadeIn 0.3s ease;
+}
+
+.login-page__copyright {
     font-size: 0.8rem;
     font-weight: 500;
     margin: 0;
+    color: #888;
 }
 
 .login-page__shutdown-btn {
@@ -271,7 +316,7 @@
 @keyframes fadeIn {
     from {
         opacity: 0;
-        transform: translateY(10px);
+        transform: translateY(5px);
     }
 
     to {
