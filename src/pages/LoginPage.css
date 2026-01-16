@@ -153,12 +153,14 @@
 .login-page__pin-entry {
     animation: fadeIn 0.4s ease-out;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
-    gap: 2rem;
-    max-width: 500px;
-    margin: 0 auto;
+    justify-content: center;
+    gap: 3rem;
     width: 100%;
+    max-width: none;
+    margin: 0 auto;
+    padding: 0 2rem;
 }
 
 .login-page__pin-header {
@@ -169,17 +171,17 @@
 .login-page__back-btn {
     background: white;
     border: 2px solid #ddd;
-    font-size: 1.125rem;
+    font-size: 0.875rem;
     color: #666;
     cursor: pointer;
-    padding: 0.75rem 1.5rem;
-    border-radius: 12px;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
     transition: all 0.2s ease;
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
     font-weight: 600;
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem;
 }
 
 .login-page__back-btn:hover {
@@ -188,20 +190,20 @@
 }
 
 .login-page__selected-user h2 {
-    font-size: 2.5rem;
+    font-size: 1.75rem;
     color: #1a1a1a;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.25rem;
     font-weight: 800;
 }
 
 .login-page__instruction {
     color: #666;
-    font-size: 1.25rem;
+    font-size: 1rem;
     font-weight: 500;
 }
 
 .login-page__pin-display-wrapper {
-    margin: 1.5rem 0;
+    margin: 1rem 0;
 }
 
 .login-page__error {
