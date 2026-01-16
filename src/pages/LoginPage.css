@@ -12,24 +12,24 @@
 
 /* Left Panel - Branding */
 .login-page__brand-panel {
-    width: 380px;
+    width: 280px;
     background: linear-gradient(180deg, #1a1a1a 0%, #2d2d2d 100%);
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 3rem 2rem;
+    padding: 2rem 1.5rem;
     border-right: 4px solid #F5C800;
     flex-shrink: 0;
 }
 
 .login-page__logo-wrapper {
-    width: 160px;
-    height: 160px;
+    width: 120px;
+    height: 120px;
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-bottom: 2rem;
+    margin-bottom: 1.5rem;
 }
 
 .login-page__logo-img {
@@ -49,7 +49,7 @@
 }
 
 .login-page__title {
-    font-size: 2rem;
+    font-size: 1.5rem;
     font-weight: 800;
     color: #F5C800;
     margin: 0 0 0.5rem 0;
@@ -75,19 +75,19 @@
 /* Content Area */
 .login-page__content {
     flex: 1;
-    padding: 3rem;
+    padding: 2rem;
     display: flex;
     flex-direction: column;
     justify-content: center;
-    overflow-y: auto;
+    overflow: hidden;
 }
 
 /* Section Title */
 .login-page__section-title {
-    font-size: 2rem;
+    font-size: 1.5rem;
     text-align: center;
     color: #1a1a1a;
-    margin-bottom: 2.5rem;
+    margin-bottom: 1.5rem;
     font-weight: 700;
 }
 
@@ -103,7 +103,7 @@
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
-    gap: 1.5rem;
+    gap: 1rem;
 }
 
 .login-page__loading {
