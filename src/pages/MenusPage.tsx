@@ -1,21 +1,25 @@
 // ===================================
-// MenusPage - Menu Management Interface
+// MenusPage - Menu Management Interface (Harmonized)
 // ===================================
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useMenuStore, useProductStore } from '../stores';
-import { PackageIcon, PlusIcon, EditIcon, TrashIcon, CheckIcon, XIcon } from '../components/ui';
+import { PackageIcon, PlusIcon, EditIcon, TrashIcon, CheckIcon, XIcon, SearchIcon, HamburgerIcon } from '../components/ui';
 import type { Menu, MenuCreateInput } from '../types';
 import { getProductImageUrl } from '../helpers/urlHelper';
+import { ask } from '@tauri-apps/plugin-dialog';
 import './MenusPage.css';
 
 export const MenusPage: React.FC = () => {
     const { menus, addMenu, updateMenu, deleteMenu, toggleMenuActive } = useMenuStore();
     const { categories, products, uploadProductImage } = useProductStore();
 
-    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
     const [editingMenu, setEditingMenu] = useState<Menu | null>(null);
+    const [isCreating, setIsCreating] = useState(false);
     const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
+
     const [menuForm, setMenuForm] = useState<MenuCreateInput>({
         name: '',
         description: '',
@@ -24,34 +28,58 @@ export const MenusPage: React.FC = () => {
         components: [],
     });
 
-    const handleOpenModal = (menu?: Menu) => {
-        if (menu) {
-            setEditingMenu(menu);
-            setMenuForm({
-                name: menu.name,
-                description: menu.description || '',
-                price: menu.price,
-                imagePath: menu.imagePath || '',
-                components: menu.components.map(comp => ({
-                    categoryId: comp.categoryId,
-                    label: comp.label,
-                    quantity: comp.quantity,
-                    isRequired: comp.isRequired,
-                    allowedProductIds: comp.allowedProductIds || [],
-                })),
-            });
-        } else {
-            setEditingMenu(null);
-            setMenuForm({
-                name: '',
-                description: '',
-                price: 0,
-                imagePath: '',
-                components: [],
-            });
-        }
+    const filteredMenus = useMemo(() => {
+        if (!searchQuery) return menus;
+        const query = searchQuery.toLowerCase();
+        return menus.filter(m => m.name.toLowerCase().includes(query));
+    }, [menus, searchQuery]);
+
+    const isPanelOpen = isCreating || editingMenu !== null;
+
+    const handleOpenCreate = () => {
+        setEditingMenu(null);
         setSelectedImageFile(null);
-        setIsModalOpen(true);
+        setMenuForm({
+            name: '',
+            description: '',
+            price: 0,
+            imagePath: '',
+            components: [],
+        });
+        setIsCreating(true);
+    };
+
+    const handleOpenEdit = (menu: Menu) => {
+        setIsCreating(false);
+        setSelectedImageFile(null);
+        setEditingMenu(menu);
+        setMenuForm({
+            name: menu.name,
+            description: menu.description || '',
+            price: menu.price,
+            imagePath: menu.imagePath || '',
+            components: menu.components.map(comp => ({
+                categoryId: comp.categoryId,
+                label: comp.label,
+                quantity: comp.quantity,
+                isRequired: comp.isRequired,
+                allowedProductIds: comp.allowedProductIds || [],
+            })),
+        });
+    };
+
+    const handleClosePanel = () => {
+        setEditingMenu(null);
+        setIsCreating(false);
+        setSelectedImageFile(null);
+    };
+
+    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            setSelectedImageFile(file);
+            setMenuForm({ ...menuForm, imagePath: URL.createObjectURL(file) });
+        }
     };
 
     const handleSave = async () => {
@@ -60,22 +88,19 @@ export const MenusPage: React.FC = () => {
             return;
         }
 
+        setIsSaving(true);
         try {
             let finalImagePath = menuForm.imagePath;
 
-            // Upload image if a new file was selected
             if (selectedImageFile) {
-                console.log("Starting upload for:", selectedImageFile.name);
                 try {
                     finalImagePath = await uploadProductImage(selectedImageFile);
-                    console.log("Upload success, path:", finalImagePath);
                 } catch (error) {
-                    console.error("Upload failed details:", error);
-                    alert("Échec de l'upload de l'image. Le menu sera enregistré sans nouvelle image.");
+                    console.error("Upload failed:", error);
+                    alert("Échec de l'upload de l'image.");
                     finalImagePath = editingMenu?.imagePath || '';
                 }
             } else {
-                // No new file selected, ensure we don't save a blob
                 if (finalImagePath?.startsWith('blob:')) {
                     finalImagePath = editingMenu?.imagePath || '';
                 }
@@ -89,17 +114,27 @@ export const MenusPage: React.FC = () => {
                 addMenu(menuData);
             }
 
-            setIsModalOpen(false);
-            setSelectedImageFile(null);
+            handleClosePanel();
         } catch (error) {
             console.error("Error saving menu:", error);
             alert("Erreur lors de l'enregistrement du menu");
+        } finally {
+            setIsSaving(false);
         }
     };
 
-    const handleDelete = (id: number) => {
-        if (confirm('Êtes-vous sûr de vouloir supprimer ce menu ?')) {
+    const handleDelete = async (id: number) => {
+        const confirmed = await ask('Êtes-vous sûr de vouloir supprimer ce menu ?', {
+            title: 'Confirmer la suppression',
+            kind: 'warning',
+            okLabel: 'Oui, supprimer',
+            cancelLabel: 'Non, annuler'
+        });
+        if (confirmed) {
             deleteMenu(id);
+            if (editingMenu?.id === id) {
+                handleClosePanel();
+            }
         }
     };
 
@@ -144,238 +179,245 @@ export const MenusPage: React.FC = () => {
     };
 
     return (
-        <div className="menus-page">
-            <div className="menus-header">
-                <h1>Gestion des Menus</h1>
-                <button className="btn-primary" onClick={() => handleOpenModal()}>
-                    <PlusIcon size={18} />
-                    Nouveau Menu
-                </button>
-            </div>
-
-            <div className="menus-grid">
-                {menus.map((menu) => (
-                    <div key={menu.id} className={`menu-card ${!menu.isActive ? 'inactive' : ''}`}>
-                        <div className="menu-card__image-container">
-                            {menu.imagePath ? (
-                                <img
-                                    src={getProductImageUrl(menu.imagePath)}
-                                    alt={menu.name}
-                                    className="menu-card__image"
-                                />
-                            ) : (
-                                <div className="menu-card__image-placeholder">
-                                    <PackageIcon size={48} color="#ccc" />
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="menu-card__content">
-                            <h3>{menu.name}</h3>
-                            {menu.description && <p className="menu-card__description">{menu.description}</p>}
-                            <div className="menu-card__price">{menu.price.toFixed(2)} €</div>
-
-                            <div className="menu-card__components">
-                                {menu.components.map((comp, idx) => (
-                                    <div key={idx} className="component-badge">
-                                        {comp.label} ({comp.quantity})
-                                    </div>
-                                ))}
-                            </div>
-
-                            <div className="menu-card__actions">
-                                <button
-                                    className="btn-icon"
-                                    onClick={() => toggleMenuActive(menu.id)}
-                                    title={menu.isActive ? 'Désactiver' : 'Activer'}
-                                >
-                                    {menu.isActive ? <CheckIcon size={18} /> : <XIcon size={18} />}
-                                </button>
-                                <button
-                                    className="btn-icon"
-                                    onClick={() => handleOpenModal(menu)}
-                                    title="Modifier"
-                                >
-                                    <EditIcon size={18} />
-                                </button>
-                                <button
-                                    className="btn-icon btn-danger"
-                                    onClick={() => handleDelete(menu.id)}
-                                    title="Supprimer"
-                                >
-                                    <TrashIcon size={18} />
-                                </button>
-                            </div>
-                        </div>
+        <div className={`menus-page ${isPanelOpen ? 'menus-page--panel-open' : ''}`}>
+            {/* Main Content Area */}
+            <div className="menus-main">
+                {/* Header */}
+                <div className="menus-header">
+                    <div className="menus-title">
+                        <h1>Gestion des Menus</h1>
+                        <p>{filteredMenus.length} menu{filteredMenus.length > 1 ? 's' : ''}</p>
                     </div>
-                ))}
-            </div>
+                    <button onClick={handleOpenCreate} className="btn-primary">
+                        <PlusIcon size={20} />
+                        Nouveau
+                    </button>
+                </div>
 
-            {isModalOpen && (
-                <div className="modal-overlay" onClick={() => setIsModalOpen(false)}>
-                    <div className="modal-content menus-modal-large" onClick={(e) => e.stopPropagation()}>
-                        <h2>{editingMenu ? 'Modifier le Menu' : 'Nouveau Menu'}</h2>
+                {/* Filters */}
+                <div className="menus-filters">
+                    <div className="search-wrapper">
+                        <div className="search-icon">
+                            <SearchIcon size={20} />
+                        </div>
+                        <input
+                            type="text"
+                            placeholder="Rechercher un menu..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="search-input"
+                        />
+                    </div>
+                </div>
 
-                        <div className="menus-modal-split">
-                            <div className="menus-modal-info">
-                                <div className="form-group">
-                                    <label>Nom du menu *</label>
-                                    <input
-                                        type="text"
-                                        value={menuForm.name}
-                                        onChange={(e) => setMenuForm({ ...menuForm, name: e.target.value })}
-                                        placeholder="Ex: Menu XL"
-                                        required
-                                    />
-                                </div>
-
-                                <div className="form-group">
-                                    <label>Description</label>
-                                    <textarea
-                                        value={menuForm.description}
-                                        onChange={(e) => setMenuForm({ ...menuForm, description: e.target.value })}
-                                        placeholder="Description du menu..."
-                                        rows={3}
-                                    />
-                                </div>
-
-                                <div className="form-group">
-                                    <label>Prix *</label>
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        value={menuForm.price}
-                                        onChange={(e) => setMenuForm({ ...menuForm, price: parseFloat(e.target.value) })}
-                                    />
-                                </div>
-
-                                <div className="form-group">
-                                    <label>Image du menu</label>
-                                    <input
-                                        type="file"
-                                        accept="image/*"
-                                        onChange={(e) => {
-                                            const file = e.target.files?.[0];
-                                            if (file) {
-                                                setSelectedImageFile(file);
-                                                const reader = new FileReader();
-                                                reader.onloadend = () => {
-                                                    setMenuForm({ ...menuForm, imagePath: reader.result as string });
-                                                };
-                                                reader.readAsDataURL(file);
-                                            }
-                                        }}
-                                    />
-                                    {menuForm.imagePath && (
-                                        <div className="image-preview">
-                                            <img src={getProductImageUrl(menuForm.imagePath)} alt="Aperçu" />
+                {/* Menus Grid */}
+                <div className="menus-grid">
+                    {filteredMenus.map((menu) => {
+                        const isSelected = editingMenu?.id === menu.id;
+                        return (
+                            <div
+                                key={menu.id}
+                                className={`menu-card ${!menu.isActive ? 'menu-card--inactive' : ''} ${isSelected ? 'menu-card--selected' : ''}`}
+                                onClick={() => handleOpenEdit(menu)}
+                            >
+                                {/* Image */}
+                                <div className="menu-card__image-wrapper">
+                                    {menu.imagePath ? (
+                                        <img
+                                            src={getProductImageUrl(menu.imagePath)}
+                                            alt={menu.name}
+                                            className="menu-card__image"
+                                        />
+                                    ) : (
+                                        <div className="menu-card__image-placeholder">
+                                            <HamburgerIcon size={36} />
                                         </div>
                                     )}
                                 </div>
-                            </div>
 
-                            <div className="menus-modal-components">
-                                <div className="form-section">
-                                    <div className="form-section-header">
-                                        <h3>Composants du menu</h3>
-                                        <button type="button" className="btn-secondary btn-sm" onClick={addComponent}>
-                                            <PlusIcon size={14} />
-                                            Ajouter un composant
-                                        </button>
-                                    </div>
-
-                                    <div className="menu-components-scroll">
-                                        {menuForm.components.map((component, index) => (
-                                            <div key={index} className="component-editor">
-                                                <div className="component-editor-header">
-                                                    <input
-                                                        type="text"
-                                                        value={component.label}
-                                                        onChange={(e) => updateComponent(index, { label: e.target.value })}
-                                                        placeholder="Ex: Boisson"
-                                                        className="component-label-input"
-                                                    />
-                                                    <button
-                                                        type="button"
-                                                        className="btn-icon btn-danger"
-                                                        onClick={() => removeComponent(index)}
-                                                    >
-                                                        <TrashIcon size={16} />
-                                                    </button>
-                                                </div>
-
-                                                <div className="component-editor-controls">
-                                                    <div className="form-group-inline">
-                                                        <label>Catégorie</label>
-                                                        <select
-                                                            value={component.categoryId}
-                                                            onChange={(e) => updateComponent(index, { categoryId: parseInt(e.target.value) })}
-                                                        >
-                                                            {categories.map((cat) => (
-                                                                <option key={cat.id} value={cat.id}>
-                                                                    {cat.name}
-                                                                </option>
-                                                            ))}
-                                                        </select>
-                                                    </div>
-
-                                                    <div className="form-group-inline">
-                                                        <label>Quantité</label>
-                                                        <input
-                                                            type="number"
-                                                            min="1"
-                                                            value={component.quantity}
-                                                            onChange={(e) => updateComponent(index, { quantity: parseInt(e.target.value) })}
-                                                        />
-                                                    </div>
-
-                                                    <div className="form-group-inline">
-                                                        <label>
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={component.isRequired}
-                                                                onChange={(e) => updateComponent(index, { isRequired: e.target.checked })}
-                                                            />
-                                                            Obligatoire
-                                                        </label>
-                                                    </div>
-                                                </div>
-
-                                                <div className="product-selection">
-                                                    <label>Produits autorisés ({products.filter((p) => p.categoryId === component.categoryId && p.isActive).length} disponibles)</label>
-                                                    <div className="product-selection-grid">
-                                                        {products
-                                                            .filter((p) => p.categoryId === component.categoryId && p.isActive)
-                                                            .map((product) => (
-                                                                <label key={product.id} className="product-checkbox">
-                                                                    <input
-                                                                        type="checkbox"
-                                                                        checked={component.allowedProductIds.includes(product.id)}
-                                                                        onChange={() => toggleProductInComponent(index, product.id)}
-                                                                    />
-                                                                    <span>{product.name}</span>
-                                                                </label>
-                                                            ))}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
+                                {/* Info */}
+                                <div className="menu-card__info">
+                                    <span className="menu-card__name">{menu.name}</span>
+                                    <div className="menu-card__meta">
+                                        <span className="menu-card__price">{menu.price.toFixed(2)} €</span>
+                                        <span className="menu-card__components-count">
+                                            {menu.components.length} composant{menu.components.length > 1 ? 's' : ''}
+                                        </span>
                                     </div>
                                 </div>
+
+                                {/* Quick Actions */}
+                                <div className="menu-card__actions">
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); toggleMenuActive(menu.id); }}
+                                        className={`menu-card__toggle ${menu.isActive ? 'toggle--active' : ''}`}
+                                        title={menu.isActive ? 'Désactiver' : 'Activer'}
+                                    >
+                                        {menu.isActive ? <CheckIcon size={14} /> : <XIcon size={14} />}
+                                    </button>
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); handleDelete(menu.id); }}
+                                        className="menu-card__delete"
+                                        title="Supprimer"
+                                    >
+                                        <TrashIcon size={14} />
+                                    </button>
+                                </div>
                             </div>
+                        );
+                    })}
+                </div>
+            </div>
+
+            {/* Side Panel for Edit/Create */}
+            <div className={`menus-panel ${isPanelOpen ? 'menus-panel--open' : ''}`}>
+                <div className="panel-header">
+                    <h2>{editingMenu ? 'Modifier le menu' : 'Nouveau menu'}</h2>
+                    <button onClick={handleClosePanel} className="panel-close">
+                        <XIcon size={20} />
+                    </button>
+                </div>
+
+                <div className="panel-content">
+                    {/* Image Upload */}
+                    <div className="panel-image-section">
+                        <div className="panel-image-preview">
+                            {menuForm.imagePath ? (
+                                <img
+                                    src={menuForm.imagePath.startsWith('blob:') ? menuForm.imagePath : getProductImageUrl(menuForm.imagePath)}
+                                    alt="Preview"
+                                    onError={(e) => (e.currentTarget.style.display = 'none')}
+                                />
+                            ) : (
+                                <HamburgerIcon size={48} />
+                            )}
+                        </div>
+                        <label className="panel-image-upload">
+                            <input type="file" accept="image/*" onChange={handleImageChange} />
+                            <span>Changer l'image</span>
+                        </label>
+                    </div>
+
+                    {/* Form Fields */}
+                    <div className="panel-form">
+                        <div className="form-group">
+                            <label className="form-label">Nom du menu *</label>
+                            <input
+                                type="text"
+                                value={menuForm.name}
+                                onChange={(e) => setMenuForm({ ...menuForm, name: e.target.value })}
+                                className="form-input"
+                                placeholder="Ex: Menu XL"
+                            />
                         </div>
 
-                        <div className="modal-actions">
-                            <button type="button" className="btn-secondary" onClick={() => setIsModalOpen(false)}>
-                                Annuler
-                            </button>
-                            <button type="button" className="btn-primary" onClick={handleSave}>
-                                {editingMenu ? 'Modifier' : 'Créer'}
-                            </button>
+                        <div className="form-group">
+                            <label className="form-label">Description</label>
+                            <textarea
+                                value={menuForm.description}
+                                onChange={(e) => setMenuForm({ ...menuForm, description: e.target.value })}
+                                className="form-input form-textarea"
+                                placeholder="Description du menu..."
+                                rows={2}
+                            />
+                        </div>
+
+                        <div className="form-group">
+                            <label className="form-label">Prix (€) *</label>
+                            <input
+                                type="number"
+                                step="0.01"
+                                value={menuForm.price}
+                                onChange={(e) => setMenuForm({ ...menuForm, price: parseFloat(e.target.value) || 0 })}
+                                className="form-input"
+                            />
+                        </div>
+
+                        {/* Components Section */}
+                        <div className="panel-section">
+                            <div className="panel-section-header">
+                                <span className="panel-section-title">Composants</span>
+                                <button type="button" className="btn-sm btn-secondary" onClick={addComponent}>
+                                    <PlusIcon size={14} />
+                                    Ajouter
+                                </button>
+                            </div>
+
+                            <div className="components-list">
+                                {menuForm.components.map((component, index) => (
+                                    <div key={index} className="component-editor">
+                                        <div className="component-header">
+                                            <input
+                                                type="text"
+                                                value={component.label}
+                                                onChange={(e) => updateComponent(index, { label: e.target.value })}
+                                                placeholder="Ex: Boisson"
+                                                className="form-input component-label"
+                                            />
+                                            <button
+                                                type="button"
+                                                className="component-delete"
+                                                onClick={() => removeComponent(index)}
+                                            >
+                                                <TrashIcon size={14} />
+                                            </button>
+                                        </div>
+
+                                        <div className="component-controls">
+                                            <select
+                                                value={component.categoryId}
+                                                onChange={(e) => updateComponent(index, { categoryId: parseInt(e.target.value) })}
+                                                className="form-input"
+                                            >
+                                                {categories.map((cat) => (
+                                                    <option key={cat.id} value={cat.id}>
+                                                        {cat.name}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                value={component.quantity}
+                                                onChange={(e) => updateComponent(index, { quantity: parseInt(e.target.value) })}
+                                                className="form-input component-qty"
+                                                title="Quantité"
+                                            />
+                                        </div>
+
+                                        <div className="product-chips">
+                                            {products
+                                                .filter((p) => p.categoryId === component.categoryId && p.isActive)
+                                                .map((product) => (
+                                                    <label
+                                                        key={product.id}
+                                                        className={`product-chip ${component.allowedProductIds.includes(product.id) ? 'product-chip--selected' : ''}`}
+                                                    >
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={component.allowedProductIds.includes(product.id)}
+                                                            onChange={() => toggleProductInComponent(index, product.id)}
+                                                        />
+                                                        {product.name}
+                                                    </label>
+                                                ))}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 </div>
-            )}
+
+                <div className="panel-footer">
+                    <button onClick={handleClosePanel} className="btn-secondary" disabled={isSaving}>
+                        Annuler
+                    </button>
+                    <button onClick={handleSave} className="btn-primary" disabled={isSaving}>
+                        {isSaving ? 'Enregistrement...' : 'Enregistrer'}
+                    </button>
+                </div>
+            </div>
         </div>
     );
 };

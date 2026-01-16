@@ -43,8 +43,7 @@ export const useTransactionStore = create<TransactionState>()(
 
                 const newTransactionId = lastTransactionId + 1;
 
-                // Create transaction items (for future SQLite storage)
-                items.map((item, index) => ({
+                const transactionItems: any[] = items.map((item, index) => ({
                     id: newTransactionId * 1000 + index,
                     transactionId: newTransactionId,
                     productId: item.product.id,
@@ -61,6 +60,7 @@ export const useTransactionStore = create<TransactionState>()(
                     paymentMethod,
                     cashReceived,
                     changeGiven,
+                    items: transactionItems,
                     isSynced: false,
                 };
 

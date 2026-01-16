@@ -1,14 +1,21 @@
 // ===================================
 // API Service - HTTP Client Configuration
 // ===================================
-import { fetch } from '@tauri-apps/plugin-http';
+// Use native fetch for better compatibility with standard build tools
+const fetch = window.fetch;
 
 export const DEFAULT_API_URL = 'https://api.caissefacile.asmanissieux.fr';
 
 // Get API URL from localStorage or use default
 export function getApiUrl(): string {
+    // Force localhost for local development regardless of localStorage
+    if (import.meta.env.DEV) {
+        return 'http://127.0.0.1:3001';
+    }
+
     if (typeof window !== 'undefined') {
-        return localStorage.getItem('ma-caisse-api-url') || DEFAULT_API_URL;
+        const saved = localStorage.getItem('ma-caisse-api-url');
+        if (saved) return saved;
     }
     return DEFAULT_API_URL;
 }
@@ -53,7 +60,6 @@ async function apiRequest<T>(
         const response = await fetch(url, {
             ...options,
             headers: headers,
-            connectTimeout: 5000,
         });
 
         if (!response.ok) {
@@ -370,5 +376,54 @@ export const createStockMovement = async (data: {
         throw new Error(error || 'Failed to create stock movement');
     }
 
+    return response.json();
+};
+
+// ===================================
+// User Management API
+// ===================================
+
+import type { User, UserRole } from '../types';
+
+export const fetchUsers = async (): Promise<{ success: boolean; users: User[] }> => {
+    const response = await fetch(`${getApiUrl()}/api/users?t=${Date.now()}`);
+    if (!response.ok) throw new Error('Failed to fetch users');
+    return response.json();
+};
+
+export const createUser = async (data: {
+    name: string;
+    pin: string;
+    role: UserRole;
+}): Promise<ApiResponse> => {
+    const response = await fetch(`${getApiUrl()}/api/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+    return response.json();
+};
+
+export const updateUser = async (
+    id: number,
+    data: {
+        name?: string;
+        pin?: string;
+        role?: UserRole;
+        isActive?: boolean;
+    }
+): Promise<ApiResponse> => {
+    const response = await fetch(`${getApiUrl()}/api/users/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+    return response.json();
+};
+
+export const deleteUser = async (id: number): Promise<ApiResponse> => {
+    const response = await fetch(`${getApiUrl()}/api/users/${id}`, {
+        method: 'DELETE',
+    });
     return response.json();
 };

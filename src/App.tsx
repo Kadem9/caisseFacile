@@ -3,7 +3,7 @@
 // ===================================
 
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { LoginPage, POSPage, ProductsPage, StockPage, ReportsPage, ClosurePage, SettingsPage, CategoriesPage } from './pages';
+import { LoginPage, POSPage, ProductsPage, StockPage, ReportsPage, ClosurePage, SettingsPage, CategoriesPage, BackupPage, UsersPage } from './pages';
 import MenusPage from './pages/MenusPage';
 import { AdminLayout } from './layouts/AdminLayout';
 import { useAuthStore } from './stores';
@@ -135,6 +135,12 @@ function App() {
 
           <Route path="closure" element={<ClosurePage />} />
           <Route path="settings" element={<SettingsPage />} />
+          <Route path="backup" element={<BackupPage />} />
+          <Route path="users" element={
+            <RoleRoute allowedRoles={['admin']}>
+              <UsersPage />
+            </RoleRoute>
+          } />
         </Route>
 
         {/* Legacy Redirects (for backward compatibility) */}

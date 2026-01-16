@@ -2,45 +2,15 @@
 // Login Page - User Selection & PIN Entry
 // ===================================
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { UserCard } from '../components/auth';
 import { NumPad, PinDisplay } from '../components/ui';
 import { useAuthStore } from '../stores';
+import { fetchUsers, getApiUrl } from '../services/api';
 import type { User } from '../types';
 import './LoginPage.css';
 import logoImg from '../assets/logo-asmsp.png';
-
-// Temporary mock users for development
-const MOCK_USERS: User[] = [
-    {
-        id: 1,
-        name: 'Kadem',
-        pinHash: '1999',
-        role: 'admin',
-        isActive: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-    },
-    {
-        id: 2,
-        name: 'Marie Agnes',
-        pinHash: '2802',
-        role: 'cashier',
-        isActive: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-    },
-    {
-        id: 3,
-        name: 'ASMSP',
-        pinHash: '5273',
-        role: 'cashier',
-        isActive: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-    },
-];
 
 const PIN_LENGTH = 4;
 
@@ -48,10 +18,41 @@ export const LoginPage: React.FC = () => {
     const navigate = useNavigate();
     const { login } = useAuthStore();
 
+    const [users, setUsers] = useState<User[]>([]);
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
     const [pin, setPin] = useState('');
     const [isError, setIsError] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [loadError, setLoadError] = useState<string | null>(null);
+
+    const loadUsers = useCallback(async () => {
+        setIsLoading(true);
+        setLoadError(null);
+        try {
+            const apiUrl = getApiUrl();
+            console.log(`[Login] Fetching users from: ${apiUrl}/api/users`);
+            const result = await fetchUsers();
+            console.log('[Login] Fetch result:', result);
+            if (result.success) {
+                const activeUsers = result.users.filter(u => u.isActive);
+                setUsers(activeUsers);
+                if (activeUsers.length === 0) {
+                    setLoadError(`Aucun profil actif trouvé sur le serveur.`);
+                }
+            } else {
+                setLoadError(`Le serveur a renvoyé une erreur.`);
+            }
+        } catch (err: any) {
+            console.error('Failed to load users:', err);
+            setLoadError(`Erreur de connexion au serveur (${getApiUrl()})`);
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        loadUsers();
+    }, [loadUsers]);
 
     const handleUserSelect = useCallback((user: User) => {
         setSelectedUser(user);
@@ -80,11 +81,8 @@ export const LoginPage: React.FC = () => {
         if (!selectedUser || pin.length !== PIN_LENGTH) return;
 
         setIsLoading(true);
-
-        // Simulate async validation
         await new Promise((resolve) => setTimeout(resolve, 300));
 
-        // In production, this would validate against a hashed PIN
         if (pin === selectedUser.pinHash) {
             login(selectedUser);
             navigate('/pos');
@@ -103,85 +101,88 @@ export const LoginPage: React.FC = () => {
 
     return (
         <div className="login-page">
-            <div className="login-page__container">
-                {/* Header */}
-                <header className="login-page__header">
-                    <div className="login-page__brand">
-                        <div className="login-page__logo-wrapper">
-                            <img
-                                src={logoImg}
-                                alt="Logo"
-                                className="login-page__logo-img"
-                                onError={(e) => {
-                                    e.currentTarget.style.display = 'none';
-                                    e.currentTarget.parentElement!.querySelector('.login-page__logo-fallback')!.removeAttribute('hidden');
-                                }}
-                            />
-                            <span className="login-page__logo-fallback" hidden>⚽</span>
-                        </div>
-                        <div className="login-page__title-group">
-                            <h1 className="login-page__title">
-                                AS Manissieux
-                            </h1>
-                            <p className="login-page__subtitle">Caisse Buvette</p>
-                        </div>
-                    </div>
-                </header>
+            {/* Left Brand Panel */}
+            <aside className="login-page__brand-panel">
+                <div className="login-page__logo-wrapper">
+                    <img
+                        src={logoImg}
+                        alt="Logo AS Manissieux"
+                        className="login-page__logo-img"
+                        onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                        }}
+                    />
+                </div>
+                <div className="login-page__title-group">
+                    <h1 className="login-page__title">AS Manissieux</h1>
+                    <p className="login-page__subtitle">Caisse Buvette</p>
+                </div>
+            </aside>
 
-                {/* Content */}
+            {/* Right Content Panel */}
+            <div className="login-page__content-panel">
                 <main className="login-page__content">
                     {!selectedUser ? (
-                        // Step 1: User Selection
                         <section className="login-page__users">
-                            <h2 className="login-page__section-title">Choisissez votre profil</h2>
-                            <div className="login-page__user-grid">
-                                {MOCK_USERS.map((user) => (
-                                    <UserCard
-                                        key={user.id}
-                                        user={user}
-                                        onSelect={handleUserSelect}
-                                    />
-                                ))}
-                            </div>
+                            <h2 className="login-page__section-title">
+                                Qui êtes-vous ?
+                            </h2>
+
+                            {isLoading ? (
+                                <div className="login-page__loading">Chargement...</div>
+                            ) : loadError ? (
+                                <div className="login-page__error-container">
+                                    <p className="login-page__error-msg">{loadError}</p>
+                                    <button onClick={loadUsers} className="login-page__retry-btn">
+                                        Réessayer
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="login-page__user-grid">
+                                    {users.map((user: User) => (
+                                        <UserCard
+                                            key={user.id}
+                                            user={user}
+                                            onSelect={handleUserSelect}
+                                        />
+                                    ))}
+                                </div>
+                            )}
                         </section>
                     ) : (
-                        // Step 2: PIN Entry
                         <section className="login-page__pin-entry">
-                            <div className="login-page__pin-left">
+                            <div className="login-page__pin-header">
                                 <button
                                     className="login-page__back-btn"
                                     onClick={handleBackToUsers}
                                     type="button"
-                                    style={{ position: 'static', alignSelf: 'flex-start', marginBottom: 'auto' }}
                                 >
                                     ← Retour
                                 </button>
 
-                                <div className="login-page__pin-header">
-                                    <div className="login-page__selected-user">
-                                        <h2>Bonjour, {selectedUser.name.split(' ')[0]} !</h2>
-                                        <p className="login-page__instruction">
-                                            Entrez votre code PIN
-                                        </p>
-                                    </div>
-
-                                    <div style={{ marginTop: '2rem' }}>
-                                        <PinDisplay
-                                            length={pin.length}
-                                            maxLength={PIN_LENGTH}
-                                            isError={isError}
-                                        />
-                                    </div>
-
-                                    {isError && (
-                                        <p className="login-page__error" style={{ marginTop: '1rem' }}>
-                                            Code PIN incorrect. Réessayez.
-                                        </p>
-                                    )}
+                                <div className="login-page__selected-user">
+                                    <h2>Bonjour, {selectedUser.name.split(' ')[0]} !</h2>
+                                    <p className="login-page__instruction">
+                                        Entrez votre code PIN
+                                    </p>
                                 </div>
+
+                                <div className="login-page__pin-display-wrapper">
+                                    <PinDisplay
+                                        length={pin.length}
+                                        maxLength={PIN_LENGTH}
+                                        isError={isError}
+                                    />
+                                </div>
+
+                                {isError && (
+                                    <p className="login-page__error">
+                                        Code PIN incorrect. Réessayez.
+                                    </p>
+                                )}
                             </div>
 
-                            <div className="login-page__pin-right">
+                            <div className="login-page__numpad-wrapper">
                                 <NumPad
                                     onDigitPress={handleDigitPress}
                                     onBackspace={handleBackspace}
@@ -195,9 +196,8 @@ export const LoginPage: React.FC = () => {
                     )}
                 </main>
 
-                {/* Footer */}
                 <footer className="login-page__footer">
-                    <p>CaisseFacile développé par Kadem. Tous droits réservés. © 2026</p>
+                    <p>CaisseFacile © 2026 - Développé par Kadem</p>
                 </footer>
             </div>
         </div>

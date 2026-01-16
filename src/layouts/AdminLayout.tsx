@@ -1,6 +1,6 @@
 import React from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { PackageIcon, SettingsIcon, ChartIcon, ClipboardIcon, CardIcon, BoxIcon } from '../components/ui';
+import { PackageIcon, SettingsIcon, ChartIcon, ClipboardIcon, CardIcon, BoxIcon, DownloadIcon, UserIcon } from '../components/ui';
 import { useAuthStore } from '../stores';
 import './AdminLayout.css';
 import logoImg from '../assets/logo-asmsp.png';
@@ -113,6 +113,28 @@ export const AdminLayout: React.FC = () => {
                         <CardIcon size={20} />
                         Clôtures
                     </NavLink>
+
+                    <NavLink
+                        to="/admin/backup"
+                        className={({ isActive }) =>
+                            `admin-sidebar__link ${isActive ? 'admin-sidebar__link--active' : ''}`
+                        }
+                    >
+                        <DownloadIcon size={20} />
+                        Sauvegarde
+                    </NavLink>
+
+                    {!isCashier && (
+                        <NavLink
+                            to="/admin/users"
+                            className={({ isActive }) =>
+                                `admin-sidebar__link ${isActive ? 'admin-sidebar__link--active' : ''}`
+                            }
+                        >
+                            <UserIcon size={20} />
+                            Utilisateurs
+                        </NavLink>
+                    )}
 
                     <NavLink
                         to="/admin/settings"

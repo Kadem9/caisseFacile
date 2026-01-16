@@ -47,6 +47,7 @@ export interface CategoryCreateInput {
   color: string;
   icon?: string;
   sortOrder?: number;
+  isActive?: boolean;
 }
 
 // ===================================
@@ -91,6 +92,7 @@ export interface Transaction {
   paymentMethod: PaymentMethod;
   cashReceived?: number;
   changeGiven?: number;
+  items: TransactionItem[];
   isSynced: boolean;
 }
 

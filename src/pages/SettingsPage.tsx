@@ -239,14 +239,9 @@ export const SettingsPage: React.FC = () => {
         <div className="settings-page">
             {/* Header */}
             <header className="settings-header">
-                <div className="settings-header__left">
-                    <button className="settings-header__back" onClick={handleBack} type="button">
-                        <ArrowLeftIcon size={24} />
-                    </button>
-                    <h1 className="settings-header__title">
-                        <SettingsIcon size={24} className="inline mr-2" />
-                        Paramètres
-                    </h1>
+                <div className="settings-title">
+                    <h1>Paramètres</h1>
+                    <p>Configuration du matériel et synchronisation</p>
                 </div>
             </header>
 

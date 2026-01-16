@@ -6,7 +6,6 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Button,
-    ArrowLeftIcon,
     PackageIcon,
     PlusIcon,
     MinusIcon
@@ -205,11 +204,9 @@ export const StockPage: React.FC = () => {
         <div className="stock-page">
             {/* Header */}
             <header className="stock-header">
-                <div className="stock-header__left">
-                    <button className="stock-header__back" onClick={handleBack} type="button">
-                        <ArrowLeftIcon size={24} />
-                    </button>
-                    <h1 className="stock-header__title">Gestion des Stocks</h1>
+                <div className="stock-title">
+                    <h1>Gestion des Stocks</h1>
+                    <p>{products.filter(p => p.isActive).length} produits</p>
                 </div>
             </header>
 

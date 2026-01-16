@@ -10,4 +10,6 @@ export { ReportsPage } from './ReportsPage';
 export { ClosurePage } from './ClosurePage';
 export { SettingsPage } from './SettingsPage';
 export { CategoriesPage } from './CategoriesPage';
+export { BackupPage } from './BackupPage';
+export { UsersPage } from './UsersPage';
 

@@ -149,6 +149,17 @@ db.exec(`
         FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
     );
 
+    -- Users table
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        pin_hash TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'cashier',
+        is_active INTEGER DEFAULT 1,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+
     -- Sync log table
     CREATE TABLE IF NOT EXISTS sync_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -204,6 +215,27 @@ if (checkProducts.count === 0) {
     console.log(`[Database] ✅ Seeded ${INITIAL_PRODUCTS.length} products.`);
 }
 
+// Seed Users
+const checkUsers = db.prepare('SELECT count(*) as count FROM users').get();
+if (checkUsers.count === 0) {
+    console.log('[Database] Seeding initial users...');
+    const INITIAL_USERS = [
+        { name: 'Kadem', pin_hash: '1999', role: 'admin' },
+        { name: 'Marie Agnes', pin_hash: '2802', role: 'cashier' },
+        { name: 'ASMSP', pin_hash: '5273', role: 'cashier' },
+    ];
+    const insertUser = db.prepare(`
+        INSERT INTO users (name, pin_hash, role, is_active, created_at, updated_at)
+        VALUES (@name, @pin_hash, @role, 1, @now, @now)
+    `);
+    const now = new Date().toISOString();
+    const insertMany = db.transaction((users) => {
+        for (const u of users) insertUser.run({ ...u, now });
+    });
+    insertMany(INITIAL_USERS);
+    console.log(`[Database] ✅ Seeded ${INITIAL_USERS.length} users.`);
+}
+
 // Migration: Add columns if missing (for existing DBs)
 try {
     const tableInfo = db.pragma('table_info(products)');
@@ -246,7 +278,9 @@ app.use(helmet({
 app.use(cors({
     origin: [
         'http://localhost:1420',
-        'http://localhost:5173', // Vite default
+        'http://127.0.0.1:1420',
+        'http://localhost:5173',
+        'http://127.0.0.1:5173',
         'tauri://localhost',
         'app://localhost'
     ],
@@ -1045,6 +1079,7 @@ app.get('/api/transactions', (req, res) => {
                 id, local_id as localId, user_id as userId, 
                 total_amount as totalAmount, payment_method as paymentMethod,
                 cash_received as cashReceived, change_given as changeGiven,
+                items,
                 created_at as createdAt
             FROM transactions
         `;
@@ -1078,6 +1113,7 @@ app.get('/api/transactions', (req, res) => {
         res.json({
             transactions: transactions.map(t => ({
                 ...t,
+                items: t.items ? JSON.parse(t.items) : [],
                 createdAt: new Date(t.createdAt)
             })),
             count: transactions.length
@@ -1203,6 +1239,103 @@ app.post('/api/stock-movements', (req, res) => {
 
     } catch (error) {
         console.error('Create stock movement error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ===== Users Management =====
+
+// Get all users
+app.get('/api/users', (req, res) => {
+    try {
+        const users = db.prepare('SELECT id, name, pin_hash as pinHash, role, is_active as isActive, created_at as createdAt, updated_at as updatedAt FROM users ORDER BY name').all();
+        res.json({
+            success: true,
+            users: users.map(u => ({
+                ...u,
+                isActive: !!u.isActive,
+                createdAt: u.createdAt,
+                updatedAt: u.updatedAt
+            }))
+        });
+    } catch (error) {
+        console.error('Get users error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Create user
+app.post('/api/users', (req, res) => {
+    try {
+        const { name, pin, role } = req.body;
+        if (!name || !pin || !role) {
+            return res.status(400).json({ error: 'Missing required fields: name, pin, role' });
+        }
+
+        const now = new Date().toISOString();
+        const result = db.prepare(`
+            INSERT INTO users (name, pin_hash, role, is_active, created_at, updated_at)
+            VALUES (?, ?, ?, 1, ?, ?)
+        `).run(name, pin, role, now, now);
+
+        res.json({
+            success: true,
+            id: result.lastInsertRowid,
+            message: 'User created'
+        });
+    } catch (error) {
+        console.error('Create user error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Update user
+app.put('/api/users/:id', (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, pin, role, isActive } = req.body;
+
+        const now = new Date().toISOString();
+        const updates = [];
+        const params = [];
+
+        if (name) { updates.push('name = ?'); params.push(name); }
+        if (pin) { updates.push('pin_hash = ?'); params.push(pin); }
+        if (role) { updates.push('role = ?'); params.push(role); }
+        if (isActive !== undefined) { updates.push('is_active = ?'); params.push(isActive ? 1 : 0); }
+
+        updates.push('updated_at = ?');
+        params.push(now);
+        params.push(id);
+
+        const result = db.prepare(`
+            UPDATE users SET ${updates.join(', ')} WHERE id = ?
+        `).run(...params);
+
+        if (result.changes === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        res.json({ success: true, message: 'User updated' });
+    } catch (error) {
+        console.error('Update user error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Delete user
+app.delete('/api/users/:id', (req, res) => {
+    try {
+        const { id } = req.params;
+        const result = db.prepare('DELETE FROM users WHERE id = ?').run(id);
+
+        if (result.changes === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        res.json({ success: true, message: 'User deleted' });
+    } catch (error) {
+        console.error('Delete user error:', error);
         res.status(500).json({ error: error.message });
     }
 });

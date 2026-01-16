@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useProductStore } from '../stores';
 import { PlusIcon, EditIcon, TrashIcon } from '../components/ui';
 import type { Category, CategoryCreateInput } from '../types';
+import { ask } from '@tauri-apps/plugin-dialog';
 import './CategoriesPage.css';
 
 // Color palette
@@ -18,7 +19,8 @@ export const CategoriesPage: React.FC = () => {
         name: '',
         color: CATEGORY_COLORS[0],
         icon: '',
-        sortOrder: 0
+        sortOrder: 0,
+        isActive: true
     });
 
     const handleOpenModal = (category?: Category) => {
@@ -28,7 +30,8 @@ export const CategoriesPage: React.FC = () => {
                 name: category.name,
                 color: category.color,
                 icon: category.icon,
-                sortOrder: category.sortOrder
+                sortOrder: category.sortOrder,
+                isActive: category.isActive
             });
         } else {
             setEditingCategory(null);
@@ -36,7 +39,8 @@ export const CategoriesPage: React.FC = () => {
                 name: '',
                 color: CATEGORY_COLORS[0],
                 icon: '',
-                sortOrder: categories.length + 1
+                sortOrder: categories.length + 1,
+                isActive: true
             });
         }
         setIsModalOpen(true);
@@ -52,8 +56,14 @@ export const CategoriesPage: React.FC = () => {
         setIsModalOpen(false);
     };
 
-    const handleDelete = (id: number) => {
-        if (window.confirm('Êtes-vous sûr de vouloir supprimer cette famille ?')) {
+    const handleDelete = async (id: number) => {
+        const confirmed = await ask('Êtes-vous sûr de vouloir supprimer cette famille ?', {
+            title: 'Confirmer la suppression',
+            kind: 'warning',
+            okLabel: 'Oui, supprimer',
+            cancelLabel: 'Non, annuler'
+        });
+        if (confirmed) {
             deleteCategory(id);
         }
     };
@@ -63,21 +73,20 @@ export const CategoriesPage: React.FC = () => {
             <div className="categories-header">
                 <div className="categories-title">
                     <h1>Familles de Produits</h1>
-                    <p>Gérez les catégories de votre carte</p>
+                    <p>{categories.length} famille{categories.length > 1 ? 's' : ''}</p>
                 </div>
                 <button
                     onClick={() => handleOpenModal()}
-                    className="category-card__action-btn category-card__action-btn--primary"
-                    style={{ background: '#6366f1', color: 'white', padding: '0.75rem 1rem', gap: '0.5rem' }}
+                    className="btn-primary"
                 >
                     <PlusIcon size={20} />
-                    Nouvelle Famille
+                    Nouveau
                 </button>
             </div>
 
             <div className="categories-grid">
                 {categories.map((category) => (
-                    <div key={category.id} className="category-card">
+                    <div key={category.id} className={`category-card ${!category.isActive ? 'category-card--inactive' : ''}`}>
                         <div className="category-card__stripe" style={{ backgroundColor: category.color }}></div>
                         <div className="category-card__content">
                             <div className="category-card__header">
@@ -99,8 +108,15 @@ export const CategoriesPage: React.FC = () => {
                                     </button>
                                 </div>
                             </div>
-                            <h3 className="category-card__name">{category.name}</h3>
-                            <span className="category-card__order">Ordre d'affichage: {category.sortOrder}</span>
+                            <div className="category-card__info">
+                                <h3 className="category-card__name">{category.name}</h3>
+                                <div className="category-card__badges">
+                                    <span className="category-card__order">Ordre: {category.sortOrder}</span>
+                                    <span className={`category-card__status ${category.isActive ? 'status--active' : 'status--inactive'}`}>
+                                        {category.isActive ? 'Active' : 'Inactive'}
+                                    </span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 ))}
@@ -143,14 +159,30 @@ export const CategoriesPage: React.FC = () => {
                                 </div>
                             </div>
 
+                            <div className="form-row">
+                                <div className="form-group">
+                                    <label className="form-label">Ordre d'affichage</label>
+                                    <input
+                                        type="number"
+                                        value={formData.sortOrder}
+                                        onChange={(e) => setFormData({ ...formData, sortOrder: parseInt(e.target.value) })}
+                                        className="form-input"
+                                    />
+                                </div>
+                            </div>
+
                             <div className="form-group">
-                                <label className="form-label">Ordre d'affichage</label>
-                                <input
-                                    type="number"
-                                    value={formData.sortOrder}
-                                    onChange={(e) => setFormData({ ...formData, sortOrder: parseInt(e.target.value) })}
-                                    className="form-input"
-                                />
+                                <label className="form-checkbox">
+                                    <input
+                                        type="checkbox"
+                                        checked={formData.isActive}
+                                        onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+                                    />
+                                    <div className="form-checkbox__label">
+                                        <span className="form-checkbox__title">Catégorie active</span>
+                                        <span className="form-checkbox__desc">Visible par le caissier sur la POS</span>
+                                    </div>
+                                </label>
                             </div>
 
                             <div className="modal-actions">

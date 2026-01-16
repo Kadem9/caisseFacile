@@ -184,10 +184,10 @@ export const ClosurePage: React.FC = () => {
         <div className="closure-page">
             {/* Header */}
             <header className="closure-header">
-                <Button variant="secondary" onClick={handleBack}>
-                    <ArrowLeftIcon size={18} className="mr-2" /> Retour au POS
-                </Button>
-                <h1>Clôture de Caisse</h1>
+                <div className="closure-title">
+                    <h1>Clôture de Caisse</h1>
+                    <p>{sessionStats.transactionCount} transaction{sessionStats.transactionCount > 1 ? 's' : ''} aujourd'hui</p>
+                </div>
             </header>
 
             <div className={`closure-status ${closureOpen ? 'closure-status--open' : 'closure-status--closed'}`}>
