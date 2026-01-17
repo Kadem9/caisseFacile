@@ -2,48 +2,10 @@
 // API Service - HTTP Client Configuration
 // ===================================
 
-// Tauri fetch initialization
-let tauriFetch: typeof globalThis.fetch | null = null;
-let fetchInitialized = false;
-let fetchInitPromise: Promise<void> | null = null;
-
-// Initialize Tauri fetch if available
-function initTauriFetch(): Promise<void> {
-    if (fetchInitPromise) return fetchInitPromise;
-
-    fetchInitPromise = new Promise((resolve) => {
-        if (typeof window !== 'undefined' && (window as any).__TAURI__) {
-            import('@tauri-apps/plugin-http').then(module => {
-                tauriFetch = module.fetch;
-                console.log('[API] Tauri HTTP plugin loaded');
-                fetchInitialized = true;
-                resolve();
-            }).catch(() => {
-                console.log('[API] Tauri HTTP plugin not available, using native fetch');
-                fetchInitialized = true;
-                resolve();
-            });
-        } else {
-            console.log('[API] Not in Tauri environment, using native fetch');
-            fetchInitialized = true;
-            resolve();
-        }
-    });
-
-    return fetchInitPromise;
-}
-
-// Start initialization immediately
-initTauriFetch();
-
-// Wrapper function that waits for initialization and uses the appropriate fetch
+// Use native fetch directly - CSP is configured to allow API connections
+// This is simpler and more reliable across all platforms (Windows, macOS, Linux)
 async function safeFetch(url: string, options?: RequestInit): Promise<Response> {
-    // Wait for fetch to be initialized
-    if (!fetchInitialized) {
-        await initTauriFetch();
-    }
-    const fetchFn = tauriFetch || globalThis.fetch;
-    return fetchFn(url, options);
+    return globalThis.fetch(url, options);
 }
 
 export const DEFAULT_API_URL = 'https://api.caissefacile.asmanissieux.fr';
