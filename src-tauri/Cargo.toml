@@ -32,3 +32,4 @@ serialport = "4.3"
 printers = "2.2"
 system_shutdown = "4.0"
 chrono = "0.4"
+tokio = { version = "1", features = ["full"] }
