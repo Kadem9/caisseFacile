@@ -17,7 +17,7 @@ import {
     type SyncResult,
 } from '../services/api';
 import { useImageCacheStore } from './imageCacheStore';
-import type { Transaction, CashClosure, Product, StockMovement, Menu } from '../types';
+import type { Transaction, CashClosure, Product, StockMovement, Menu, Category } from '../types';
 
 // ===================================
 // Types
@@ -66,6 +66,7 @@ export interface SyncState {
     // Handlers (to avoid circular deps)
     productMergeHandler: ((products: Product[]) => void) | null;
     menuMergeHandler: ((menus: Menu[]) => void) | null;
+    categoryMergeHandler: ((categories: Category[]) => void) | null;
 
     // Actions
     checkConnection: () => Promise<boolean>;
@@ -73,6 +74,7 @@ export interface SyncState {
     setAutoSync: (enabled: boolean) => void;
     registerProductHandler: (handler: (products: Product[]) => void) => void;
     registerMenuHandler: (handler: (menus: Menu[]) => void) => void;
+    registerCategoryHandler: (handler: (categories: Category[]) => void) => void;
 
     // Queue management
     addToQueue: (type: SyncEntityType, data: Transaction | CashClosure | Product | StockMovement | Menu) => void;
@@ -108,6 +110,7 @@ export const useSyncStore = create<SyncState>()(
             syncLog: [],
             productMergeHandler: null,
             menuMergeHandler: null,
+            categoryMergeHandler: null,
 
             registerProductHandler: (handler) => {
                 set({ productMergeHandler: handler });
@@ -115,6 +118,10 @@ export const useSyncStore = create<SyncState>()(
 
             registerMenuHandler: (handler) => {
                 set({ menuMergeHandler: handler });
+            },
+
+            registerCategoryHandler: (handler) => {
+                set({ categoryMergeHandler: handler });
             },
 
             // Check server connection
@@ -226,6 +233,18 @@ export const useSyncStore = create<SyncState>()(
                             });
                         } else {
                             console.warn('[Sync] No menu handler registered!');
+                        }
+                    }
+
+                    // Handle categories
+                    const categories = result.categories || [];
+                    if (categories.length > 0) {
+                        const handler = get().categoryMergeHandler;
+                        if (handler) {
+                            handler(categories);
+                            console.log('[Sync] Categories merged via handler:', categories.length);
+                        } else {
+                            console.warn('[Sync] No category handler registered!');
                         }
                     }
 

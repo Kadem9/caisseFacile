@@ -149,6 +149,21 @@ db.exec(`
         FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
     );
 
+    -- Categories table
+    CREATE TABLE IF NOT EXISTS categories (
+        id INTEGER PRIMARY KEY,
+        local_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        color TEXT,
+        icon TEXT,
+        sort_order INTEGER DEFAULT 0,
+        is_active INTEGER DEFAULT 1,
+        created_at TEXT,
+        updated_at TEXT,
+        synced_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(local_id)
+    );
+
     -- Users table
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -561,6 +576,57 @@ app.post('/api/sync/products', (req, res) => {
     }
 });
 
+// ===== Categories Sync =====
+
+app.post('/api/sync/categories', (req, res) => {
+    try {
+        const { categories } = req.body;
+        if (!Array.isArray(categories)) {
+            return res.status(400).json({ error: 'Invalid categories array' });
+        }
+
+        const insert = db.prepare(`
+            INSERT OR REPLACE INTO categories 
+            (local_id, name, color, icon, sort_order, is_active, created_at, updated_at, synced_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+
+        const now = new Date().toISOString();
+
+        const insertMany = db.transaction((items) => {
+            for (const c of items) {
+                insert.run(
+                    c.id,
+                    c.name,
+                    c.color || null,
+                    c.icon || null,
+                    c.sortOrder || 0,
+                    c.isActive ? 1 : 0,
+                    c.createdAt || now,
+                    c.updatedAt || now,
+                    now
+                );
+            }
+        });
+
+        insertMany(categories);
+
+        db.prepare(`
+            INSERT INTO sync_log (entity_type, entity_count, status)
+            VALUES ('category', ?, 'success')
+        `).run(categories.length);
+
+        res.json({
+            success: true,
+            count: categories.length,
+            message: `${categories.length} categories synchronized`
+        });
+    } catch (error) {
+        console.error('Sync categories error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // ===== Menus Sync =====
 
 app.post('/api/sync/menus', (req, res) => {
@@ -871,10 +937,27 @@ app.get('/api/sync/diff', (req, res) => {
             };
         });
 
+        // Get updated categories
+        const categories = db.prepare(`
+            SELECT 
+                id, local_id as localId, name, color, icon,
+                sort_order as sortOrder, is_active as isActive,
+                created_at as createdAt, updated_at as updatedAt
+            FROM categories 
+            WHERE updated_at > ? OR synced_at > ?
+        `).all(lastSync, lastSync);
+
+        // Map boolean fields for categories
+        const categoriesFormatted = categories.map(c => ({
+            ...c,
+            isActive: Boolean(c.isActive)
+        }));
+
         res.json({
             ts: new Date().toISOString(),
             products: productsFormatted,
             menus: menusFormatted,
+            categories: categoriesFormatted,
         });
     } catch (error) {
         console.error('Sync diff error:', error);

@@ -69,6 +69,7 @@ interface ProductState {
 
     // Sync
     mergeServerProducts: (products: Product[]) => void;
+    mergeServerCategories: (categories: Category[]) => void;
 }
 
 import { uploadImage } from '../services/api';
@@ -326,6 +327,44 @@ export const useProductStore = create<ProductState>()(
                     return {};
                 });
             },
+
+            mergeServerCategories: (serverCategories: Category[]) => {
+                set((state) => {
+                    const currentCategories = [...state.categories];
+                    let hasChanges = false;
+                    let maxId = state.lastCategoryId;
+
+                    serverCategories.forEach((serverCat) => {
+                        const index = currentCategories.findIndex(
+                            (c) => c.id === serverCat.id || (serverCat.id && c.id === serverCat.id)
+                        );
+
+                        const mappedCat: Partial<Category> = {
+                            id: serverCat.id,
+                            name: serverCat.name,
+                            color: serverCat.color,
+                            icon: serverCat.icon,
+                            sortOrder: serverCat.sortOrder,
+                            isActive: serverCat.isActive,
+                        };
+
+                        if (serverCat.id > maxId) maxId = serverCat.id;
+
+                        if (index >= 0) {
+                            currentCategories[index] = { ...currentCategories[index], ...mappedCat };
+                            hasChanges = true;
+                        } else {
+                            currentCategories.push(mappedCat as Category);
+                            hasChanges = true;
+                        }
+                    });
+
+                    if (hasChanges) {
+                        return { categories: currentCategories, lastCategoryId: maxId };
+                    }
+                    return {};
+                });
+            },
         }),
         {
             name: 'ma-caisse-products',
@@ -350,5 +389,8 @@ export const useProductStore = create<ProductState>()(
 setTimeout(() => {
     useSyncStore.getState().registerProductHandler(
         useProductStore.getState().mergeServerProducts
+    );
+    useSyncStore.getState().registerCategoryHandler(
+        useProductStore.getState().mergeServerCategories
     );
 }, 0);

@@ -98,7 +98,7 @@ export async function checkHealth(): Promise<{ success: boolean; error?: string 
 // Sync Endpoints
 // ===================================
 
-import type { Transaction, CashClosure, Product, StockMovement, Menu } from '../types';
+import type { Transaction, CashClosure, Product, StockMovement, Menu, Category } from '../types';
 import type { PaymentMethod } from '../types/database';
 
 export async function syncTransactions(transactions: Transaction[]): Promise<SyncResult> {
@@ -186,12 +186,30 @@ export async function syncStockMovements(movements: StockMovement[]): Promise<Sy
     };
 }
 
+export async function syncCategories(categories: Category[]): Promise<SyncResult> {
+    const result = await apiRequest<SyncResult>('/api/sync/categories', {
+        method: 'POST',
+        body: JSON.stringify({ categories }),
+    });
+
+    if (result.success && result.data) {
+        return result.data;
+    }
+
+    return {
+        success: false,
+        count: 0,
+        error: result.error || 'Unknown error',
+    };
+}
+
 export async function getSyncDiff(lastSync: string): Promise<{
     ts: string;
     products: Product[];
     menus: Menu[];
+    categories: Category[];
 }> {
-    const response = await fetch(`${getApiUrl()}/api/sync/diff?ts=${lastSync}`);
+    const response = await fetch(`${getApiUrl()}/api/sync/diff?since=${lastSync}`);
     if (!response.ok) {
         throw new Error('Failed to get sync diff');
     }
