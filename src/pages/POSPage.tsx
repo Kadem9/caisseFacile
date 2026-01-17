@@ -152,6 +152,65 @@ export const POSPage: React.FC = () => {
             decrementStock(item.product.id, item.quantity);
         });
 
+        // === HARDWARE ACTIONS ===
+        const savedHardwareConfig = localStorage.getItem('ma-caisse-hardware-config');
+        if (savedHardwareConfig) {
+            try {
+                const hardwareConfig = JSON.parse(savedHardwareConfig);
+                const printerName = hardwareConfig.systemPrinterName;
+                const drawerPin = hardwareConfig.drawerPin ?? 0;
+
+                // 1. Auto-open cash drawer if payment is cash or mixed
+                if (paymentResult.method === 'cash' || paymentResult.method === 'mixed') {
+                    if (printerName) {
+                        try {
+                            const { invoke } = await import('@tauri-apps/api/core');
+                            await invoke('open_drawer_via_driver', {
+                                printerName,
+                                pin: drawerPin,
+                            });
+                            console.log('[POS] Cash drawer opened automatically');
+                        } catch (drawerError) {
+                            console.warn('[POS] Failed to open cash drawer:', drawerError);
+                        }
+                    }
+                }
+
+                // 2. Print kitchen label if any product has printTicket = true
+                const kitchenItems = items.filter(item => item.product.printTicket === true);
+                if (kitchenItems.length > 0 && printerName) {
+                    try {
+                        const { invoke } = await import('@tauri-apps/api/core');
+                        // Build a simple kitchen label receipt
+                        const kitchenReceipt = {
+                            header: '🍳 CUISINE',
+                            items: kitchenItems.map(item => ({
+                                name: item.product.name,
+                                quantity: item.quantity,
+                                unit_price: item.product.price,
+                                subtotal: item.product.price * item.quantity,
+                            })),
+                            total: kitchenItems.reduce((sum, item) => sum + (item.product.price * item.quantity), 0),
+                            payment_method: 'N/A',
+                            footer: 'Étiquette cuisine',
+                            transaction_id: transaction.id,
+                            date: new Date().toLocaleString('fr-FR'),
+                        };
+                        await invoke('print_via_driver', {
+                            printerName,
+                            receipt: kitchenReceipt,
+                            paperWidth: hardwareConfig.paperWidth ?? 80,
+                        });
+                        console.log('[POS] Kitchen label printed for', kitchenItems.length, 'items');
+                    } catch (printError) {
+                        console.warn('[POS] Failed to print kitchen label:', printError);
+                    }
+                }
+            } catch (configError) {
+                console.warn('[POS] Failed to parse hardware config:', configError);
+            }
+        }
+
         // Clear the cart
         clearCart();
 
@@ -188,6 +247,7 @@ export const POSPage: React.FC = () => {
             addToQueue('transaction', { ...transactionData, id: transaction.id } as unknown as Transaction);
         }
     }, [currentUser, items, addTransaction, decrementStock, clearCart, addToQueue]);
+
 
     const formatPrice = (price: number): string => {
         return price.toFixed(2).replace('.', ',') + ' €';

@@ -15,7 +15,8 @@ import {
     SearchIcon,
     MonitorIcon,
     LightbulbIcon,
-    WifiIcon
+    WifiIcon,
+    CardIcon
 } from '../components/ui';
 import './SettingsPage.css';
 import {
@@ -46,6 +47,26 @@ interface SystemPrinterInfo {
 }
 
 type ConnectionMode = 'serial' | 'driver';
+
+interface TpeDeviceConfig {
+    name: string;        // User-friendly name (e.g., "Ingenico Move/5000")
+    port: string;        // COM port (e.g., "COM5")
+    baudRate: number;    // Baud rate (e.g., 9600)
+    posNumber: string;   // POS number for Concert protocol (01-99)
+}
+
+interface TpeConfig {
+    devices: [TpeDeviceConfig, TpeDeviceConfig]; // Two TPE slots
+    activeDeviceIndex: 0 | 1;                     // Which TPE is active
+}
+
+const DEFAULT_TPE_CONFIG: TpeConfig = {
+    devices: [
+        { name: 'Ingenico Move/5000', port: 'COM5', baudRate: 9600, posNumber: '01' },
+        { name: 'PAX A920 Pro', port: 'COM6', baudRate: 9600, posNumber: '01' },
+    ],
+    activeDeviceIndex: 0,
+};
 
 interface HardwareConfig {
     connectionMode: ConnectionMode;
@@ -80,10 +101,18 @@ export const SettingsPage: React.FC = () => {
     const [status, setStatus] = useState<HardwareStatus | null>(null);
     const [isScanning, setIsScanning] = useState(false);
     const [testResult, setTestResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-    const [activeTab, setActiveTab] = useState<'printer' | 'drawer' | 'sync'>('printer');
+    const [activeTab, setActiveTab] = useState<'printer' | 'drawer' | 'tpe' | 'sync'>('printer');
     const [isCheckingSync, setIsCheckingSync] = useState(false);
     const [syncStatus, setSyncStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
     const [systemPrinters, setSystemPrinters] = useState<SystemPrinterInfo[]>([]);
+
+    // TPE State
+    const [tpeConfig, setTpeConfig] = useState<TpeConfig>(() => {
+        const saved = localStorage.getItem('ma-caisse-tpe-config');
+        return saved ? JSON.parse(saved) : DEFAULT_TPE_CONFIG;
+    });
+    const [tpeTestResult, setTpeTestResult] = useState<{ deviceIndex: number; type: 'success' | 'error'; message: string } | null>(null);
+    const [isTpeTesting, setIsTpeTesting] = useState<number | null>(null);
 
     // Load configuration on mount
     useEffect(() => {
@@ -96,6 +125,11 @@ export const SettingsPage: React.FC = () => {
     useEffect(() => {
         localStorage.setItem('ma-caisse-hardware-config', JSON.stringify(config));
     }, [config]);
+
+    // Save TPE configuration when it changes
+    useEffect(() => {
+        localStorage.setItem('ma-caisse-tpe-config', JSON.stringify(tpeConfig));
+    }, [tpeConfig]);
 
     const scanPorts = useCallback(async () => {
         setIsScanning(true);
@@ -210,6 +244,39 @@ export const SettingsPage: React.FC = () => {
         }
     }, [config.connectionMode, config.systemPrinterName, config.drawerPort, config.printerPort, config.printerBaudRate, config.drawerPin]);
 
+    const handleTestTpe = useCallback(async (deviceIndex: number) => {
+        setIsTpeTesting(deviceIndex);
+        setTpeTestResult(null);
+        const device = tpeConfig.devices[deviceIndex];
+        try {
+            const result = await invoke<{ connected: boolean; message: string }>('test_tpe_connection', {
+                portName: device.port,
+                baudRate: device.baudRate,
+            });
+            setTpeTestResult({
+                deviceIndex,
+                type: result.connected ? 'success' : 'error',
+                message: result.message,
+            });
+        } catch (err) {
+            setTpeTestResult({
+                deviceIndex,
+                type: 'error',
+                message: String(err),
+            });
+        } finally {
+            setIsTpeTesting(null);
+        }
+    }, [tpeConfig.devices]);
+
+    const updateTpeDevice = (deviceIndex: number, updates: Partial<TpeDeviceConfig>) => {
+        setTpeConfig(prev => {
+            const newDevices = [...prev.devices] as [TpeDeviceConfig, TpeDeviceConfig];
+            newDevices[deviceIndex] = { ...newDevices[deviceIndex], ...updates };
+            return { ...prev, devices: newDevices };
+        });
+    };
+
 
     const handleCheckConnection = useCallback(async () => {
         setIsCheckingSync(true);
@@ -261,6 +328,13 @@ export const SettingsPage: React.FC = () => {
                         type="button"
                     >
                         <SyncIcon size={18} className="inline mr-2" /> Synchronisation
+                    </button>
+                    <button
+                        className={`settings-tab ${activeTab === 'tpe' ? 'settings-tab--active' : ''}`}
+                        onClick={() => setActiveTab('tpe')}
+                        type="button"
+                    >
+                        <CardIcon size={18} className="inline mr-2" /> TPE
                     </button>
                 </nav>
 
@@ -577,6 +651,191 @@ export const SettingsPage: React.FC = () => {
                                     <p style={{ marginTop: '10px', fontSize: '0.85em', color: 'var(--text-muted)' }}>
                                         <LightbulbIcon size={16} className="inline mr-1" />
                                         Si vous changez l'URL, il est recommandé de redémarrer l'application.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* TPE Tab */}
+                    {activeTab === 'tpe' && (
+                        <div className="settings-panel">
+                            <div className="settings-panel__header">
+                                <CardIcon size={24} />
+                                <div>
+                                    <h3>Terminal de Paiement Électronique</h3>
+                                    <span>Configuration des TPE (Concert V2)</span>
+                                </div>
+                            </div>
+                            <div className="settings-panel__content">
+                                {/* Active TPE Selector */}
+                                <div className="settings-form__group">
+                                    <label className="settings-form__label">TPE Actif</label>
+                                    <select
+                                        className="settings-form__select"
+                                        value={tpeConfig.activeDeviceIndex}
+                                        onChange={(e) => setTpeConfig(prev => ({
+                                            ...prev,
+                                            activeDeviceIndex: Number(e.target.value) as 0 | 1
+                                        }))}
+                                    >
+                                        <option value={0}>{tpeConfig.devices[0].name || 'TPE 1'}</option>
+                                        <option value={1}>{tpeConfig.devices[1].name || 'TPE 2'}</option>
+                                    </select>
+                                    <p className="settings-form__help">
+                                        Sélectionnez le TPE à utiliser pour les paiements par carte.
+                                    </p>
+                                </div>
+
+                                {/* TPE 1 Configuration */}
+                                <div className="settings-form__section">
+                                    <h4 className="settings-form__section-title">
+                                        🔹 TPE 1 {tpeConfig.activeDeviceIndex === 0 && '(Actif)'}
+                                    </h4>
+                                    <div className="settings-form__row">
+                                        <div className="settings-form__group">
+                                            <label className="settings-form__label">Nom</label>
+                                            <input
+                                                type="text"
+                                                className="settings-form__input"
+                                                value={tpeConfig.devices[0].name}
+                                                onChange={(e) => updateTpeDevice(0, { name: e.target.value })}
+                                                placeholder="Ex: Ingenico Move/5000"
+                                            />
+                                        </div>
+                                        <div className="settings-form__group">
+                                            <label className="settings-form__label">Port COM</label>
+                                            <select
+                                                className="settings-form__select"
+                                                value={tpeConfig.devices[0].port}
+                                                onChange={(e) => updateTpeDevice(0, { port: e.target.value })}
+                                            >
+                                                <option value="">Sélectionner...</option>
+                                                {ports.map(p => (
+                                                    <option key={p.name} value={p.name}>
+                                                        {p.name} ({p.port_type})
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div className="settings-form__row">
+                                        <div className="settings-form__group">
+                                            <label className="settings-form__label">Bauds</label>
+                                            <select
+                                                className="settings-form__select"
+                                                value={tpeConfig.devices[0].baudRate}
+                                                onChange={(e) => updateTpeDevice(0, { baudRate: Number(e.target.value) })}
+                                            >
+                                                {BAUD_RATES.map(br => (
+                                                    <option key={br} value={br}>{br}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="settings-form__group">
+                                            <label className="settings-form__label">N° Poste</label>
+                                            <input
+                                                type="text"
+                                                className="settings-form__input"
+                                                value={tpeConfig.devices[0].posNumber}
+                                                onChange={(e) => updateTpeDevice(0, { posNumber: e.target.value.slice(0, 2) })}
+                                                placeholder="01"
+                                                maxLength={2}
+                                            />
+                                        </div>
+                                    </div>
+                                    <Button onClick={() => handleTestTpe(0)} disabled={isTpeTesting === 0}>
+                                        {isTpeTesting === 0 ? (
+                                            <><RefreshIcon size={16} className="mr-2 animate-spin" /> Test en cours...</>
+                                        ) : (
+                                            <><CheckIcon size={16} className="mr-2" /> Tester la connexion</>
+                                        )}
+                                    </Button>
+                                    {tpeTestResult && tpeTestResult.deviceIndex === 0 && (
+                                        <div className={`settings-alert settings-alert--${tpeTestResult.type}`} style={{ marginTop: '10px' }}>
+                                            {tpeTestResult.type === 'success' ? <CheckIcon size={16} /> : <XIcon size={16} />}
+                                            <span style={{ marginLeft: '8px' }}>{tpeTestResult.message}</span>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* TPE 2 Configuration */}
+                                <div className="settings-form__section" style={{ marginTop: '24px' }}>
+                                    <h4 className="settings-form__section-title">
+                                        🔸 TPE 2 {tpeConfig.activeDeviceIndex === 1 && '(Actif)'}
+                                    </h4>
+                                    <div className="settings-form__row">
+                                        <div className="settings-form__group">
+                                            <label className="settings-form__label">Nom</label>
+                                            <input
+                                                type="text"
+                                                className="settings-form__input"
+                                                value={tpeConfig.devices[1].name}
+                                                onChange={(e) => updateTpeDevice(1, { name: e.target.value })}
+                                                placeholder="Ex: PAX A920 Pro"
+                                            />
+                                        </div>
+                                        <div className="settings-form__group">
+                                            <label className="settings-form__label">Port COM</label>
+                                            <select
+                                                className="settings-form__select"
+                                                value={tpeConfig.devices[1].port}
+                                                onChange={(e) => updateTpeDevice(1, { port: e.target.value })}
+                                            >
+                                                <option value="">Sélectionner...</option>
+                                                {ports.map(p => (
+                                                    <option key={p.name} value={p.name}>
+                                                        {p.name} ({p.port_type})
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div className="settings-form__row">
+                                        <div className="settings-form__group">
+                                            <label className="settings-form__label">Bauds</label>
+                                            <select
+                                                className="settings-form__select"
+                                                value={tpeConfig.devices[1].baudRate}
+                                                onChange={(e) => updateTpeDevice(1, { baudRate: Number(e.target.value) })}
+                                            >
+                                                {BAUD_RATES.map(br => (
+                                                    <option key={br} value={br}>{br}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="settings-form__group">
+                                            <label className="settings-form__label">N° Poste</label>
+                                            <input
+                                                type="text"
+                                                className="settings-form__input"
+                                                value={tpeConfig.devices[1].posNumber}
+                                                onChange={(e) => updateTpeDevice(1, { posNumber: e.target.value.slice(0, 2) })}
+                                                placeholder="01"
+                                                maxLength={2}
+                                            />
+                                        </div>
+                                    </div>
+                                    <Button onClick={() => handleTestTpe(1)} disabled={isTpeTesting === 1}>
+                                        {isTpeTesting === 1 ? (
+                                            <><RefreshIcon size={16} className="mr-2 animate-spin" /> Test en cours...</>
+                                        ) : (
+                                            <><CheckIcon size={16} className="mr-2" /> Tester la connexion</>
+                                        )}
+                                    </Button>
+                                    {tpeTestResult && tpeTestResult.deviceIndex === 1 && (
+                                        <div className={`settings-alert settings-alert--${tpeTestResult.type}`} style={{ marginTop: '10px' }}>
+                                            {tpeTestResult.type === 'success' ? <CheckIcon size={16} /> : <XIcon size={16} />}
+                                            <span style={{ marginLeft: '8px' }}>{tpeTestResult.message}</span>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="settings-form__info" style={{ marginTop: '24px' }}>
+                                    <p>
+                                        <LightbulbIcon size={16} className="inline mr-2" />
+                                        Les deux TPE sont configurés avec le protocole <strong>Concert V2</strong>.
+                                        Vous pouvez basculer entre les deux à tout moment via le sélecteur ci-dessus.
                                     </p>
                                 </div>
                             </div>

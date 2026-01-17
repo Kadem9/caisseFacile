@@ -3,7 +3,8 @@
 // ===================================
 
 import React, { useState, useCallback, useMemo } from 'react';
-import { Button, CashIcon, CardIcon, ArrowLeftIcon, XIcon, CheckIcon, DrawerIcon, PrinterIcon } from '../ui';
+import { invoke } from '@tauri-apps/api/core';
+import { Button, CashIcon, CardIcon, ArrowLeftIcon, XIcon, CheckIcon, DrawerIcon, PrinterIcon, RefreshIcon, AlertIcon } from '../ui';
 import { TicketsModal } from './TicketsModal';
 import type { PaymentMethod, CartItem } from '../../types';
 import './PaymentModal.css';
@@ -26,6 +27,19 @@ export interface PaymentResult {
 }
 
 type PaymentStep = 'method' | 'cash' | 'card' | 'mixed' | 'complete';
+type TpeStatus = 'idle' | 'connecting' | 'waiting' | 'success' | 'error';
+
+interface TpeDeviceConfig {
+    name: string;
+    port: string;
+    baudRate: number;
+    posNumber: string;
+}
+
+interface TpeConfig {
+    devices: [TpeDeviceConfig, TpeDeviceConfig];
+    activeDeviceIndex: 0 | 1;
+}
 
 const QUICK_AMOUNTS = [5, 10, 20, 50];
 
@@ -57,6 +71,11 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     const [cashInput, setCashInput] = useState('');
     const [cardAmount, setCardAmount] = useState(0);
     const [showTickets, setShowTickets] = useState(false);
+
+    // TPE State
+    const [tpeStatus, setTpeStatus] = useState<TpeStatus>('idle');
+    const [tpeMessage, setTpeMessage] = useState<string>('');
+
 
     // Calculate cash received from input
     const cashReceived = useMemo(() => {
@@ -105,19 +124,93 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
         return breakdown;
     }, [changeGiven, isPaymentValid]);
 
+    // Send payment to TPE
+    const sendToTpe = useCallback(async (amountCents: number) => {
+        setTpeStatus('connecting');
+        setTpeMessage('Connexion au TPE...');
+
+        try {
+            // Load TPE config from localStorage
+            const savedConfig = localStorage.getItem('ma-caisse-tpe-config');
+            if (!savedConfig) {
+                setTpeStatus('error');
+                setTpeMessage('Aucun TPE configuré. Allez dans Paramètres > TPE.');
+                return false;
+            }
+
+            const config: TpeConfig = JSON.parse(savedConfig);
+            const activeTpe = config.devices[config.activeDeviceIndex];
+
+            if (!activeTpe.port) {
+                setTpeStatus('error');
+                setTpeMessage(`TPE "${activeTpe.name}" non configuré (port manquant).`);
+                return false;
+            }
+
+            setTpeStatus('waiting');
+            setTpeMessage(`Attente du paiement sur ${activeTpe.name}...`);
+
+            // Send payment to TPE
+            const result = await invoke<{ success: boolean; transaction_result: string; error_message?: string }>('send_tpe_payment', {
+                portName: activeTpe.port,
+                baudRate: activeTpe.baudRate,
+                posNumber: activeTpe.posNumber,
+                amountCents,
+            });
+
+            if (result.success) {
+                setTpeStatus('success');
+                setTpeMessage('Paiement accepté !');
+
+                // Auto-confirm after success (like cash flow)
+                setTimeout(() => {
+                    const paymentResult: PaymentResult = {
+                        method: 'card',
+                        totalAmount: amountCents / 100,
+                        cashReceived: 0,
+                        cardAmount: amountCents / 100,
+                        changeGiven: 0,
+                    };
+                    setStep('complete');
+                    setTimeout(() => {
+                        onConfirm(paymentResult);
+                        setStep('method');
+                        setTpeStatus('idle');
+                        setTpeMessage('');
+                    }, 1500);
+                }, 500);
+
+                return true;
+            } else {
+                setTpeStatus('error');
+                setTpeMessage(result.error_message || 'Paiement refusé');
+                return false;
+            }
+        } catch (err) {
+            setTpeStatus('error');
+            setTpeMessage(String(err));
+            return false;
+        }
+    }, [onConfirm, totalAmount]);
+
     const handleMethodSelect = useCallback((selectedMethod: PaymentMethod) => {
         setMethod(selectedMethod);
         setCashInput('');
         setCardAmount(0);
+        setTpeStatus('idle');
+        setTpeMessage('');
 
         if (selectedMethod === 'card') {
             setStep('card');
+            // Auto-send to TPE when card is selected
+            sendToTpe(Math.round(totalAmount * 100));
         } else if (selectedMethod === 'mixed') {
             setStep('mixed');
         } else {
             setStep('cash');
         }
-    }, []);
+    }, [totalAmount, sendToTpe]);
+
 
     const handleDigitPress = useCallback((digit: string) => {
         setCashInput((prev) => {
@@ -382,23 +475,82 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
                             <div className="payment-modal__card-info">
                                 <div className="payment-modal__card-icon">
-                                    <CardIcon size={80} />
+                                    {tpeStatus === 'connecting' || tpeStatus === 'waiting' ? (
+                                        <RefreshIcon size={80} className="animate-spin" />
+                                    ) : tpeStatus === 'success' ? (
+                                        <CheckIcon size={80} color="#22c55e" />
+                                    ) : tpeStatus === 'error' ? (
+                                        <AlertIcon size={80} color="#ef4444" />
+                                    ) : (
+                                        <CardIcon size={80} />
+                                    )}
                                 </div>
                                 <p>Montant à débiter</p>
                                 <span className="payment-modal__card-amount">{formatPrice(totalAmount)}</span>
-                                <p className="payment-modal__card-instruction">
-                                    Présentez la carte au terminal
+
+                                {/* TPE Status Message */}
+                                <p className={`payment-modal__card-instruction ${tpeStatus === 'error' ? 'text-danger' : tpeStatus === 'success' ? 'text-success' : ''}`}>
+                                    {tpeMessage || 'Présentez la carte au terminal'}
                                 </p>
                             </div>
 
-                            <Button
-                                variant="secondary"
-                                size="xl"
-                                isFullWidth
-                                onClick={handleConfirmPayment}
-                            >
-                                <CheckIcon size={18} /> Paiement effectué
-                            </Button>
+                            {/* Actions based on TPE status */}
+                            {tpeStatus === 'idle' && (
+                                <Button
+                                    variant="primary"
+                                    size="xl"
+                                    isFullWidth
+                                    onClick={() => sendToTpe(Math.round(totalAmount * 100))}
+                                >
+                                    <CardIcon size={18} /> Envoyer au TPE
+                                </Button>
+                            )}
+
+                            {(tpeStatus === 'connecting' || tpeStatus === 'waiting') && (
+                                <Button
+                                    variant="secondary"
+                                    size="xl"
+                                    isFullWidth
+                                    onClick={() => {
+                                        setTpeStatus('idle');
+                                        setTpeMessage('');
+                                    }}
+                                >
+                                    <XIcon size={18} /> Annuler
+                                </Button>
+                            )}
+
+                            {tpeStatus === 'success' && (
+                                <Button
+                                    variant="primary"
+                                    size="xl"
+                                    isFullWidth
+                                    onClick={handleConfirmPayment}
+                                >
+                                    <CheckIcon size={18} /> Valider le paiement
+                                </Button>
+                            )}
+
+                            {tpeStatus === 'error' && (
+                                <div style={{ display: 'flex', gap: '1rem' }}>
+                                    <Button
+                                        variant="secondary"
+                                        size="xl"
+                                        onClick={handleConfirmPayment}
+                                        style={{ flex: 1 }}
+                                    >
+                                        <CheckIcon size={18} /> Valider manuellement
+                                    </Button>
+                                    <Button
+                                        variant="primary"
+                                        size="xl"
+                                        onClick={() => sendToTpe(Math.round(totalAmount * 100))}
+                                        style={{ flex: 1 }}
+                                    >
+                                        <RefreshIcon size={18} /> Réessayer
+                                    </Button>
+                                </div>
+                            )}
                         </div>
                     )}
 

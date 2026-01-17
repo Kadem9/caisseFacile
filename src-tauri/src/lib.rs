@@ -1,6 +1,7 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 
 mod hardware;
+mod tpe;
 
 use hardware::{
     list_serial_ports,
@@ -12,6 +13,12 @@ use hardware::{
     print_via_driver,
     open_drawer_via_driver,
     test_printer_driver,
+};
+
+use tpe::{
+    test_tpe_connection,
+    send_tpe_payment,
+    cancel_tpe_transaction,
 };
 
 #[tauri::command]
@@ -47,8 +54,11 @@ pub fn run() {
             open_drawer_via_driver,
             test_printer_driver,
             shutdown_system,
+            // TPE commands
+            test_tpe_connection,
+            send_tpe_payment,
+            cancel_tpe_transaction,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
-
