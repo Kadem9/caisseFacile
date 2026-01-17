@@ -2,10 +2,14 @@
 // API Service - HTTP Client Configuration
 // ===================================
 
-// Use native fetch directly - CSP is configured to allow API connections
-// This is simpler and more reliable across all platforms (Windows, macOS, Linux)
+// Import Tauri HTTP plugin - required for Windows WebView2 CORS bypass
+// This MUST use the Tauri fetch to work on Windows
+import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
+
+// Use Tauri fetch on all platforms for consistency
+// This bypasses WebView2 CORS restrictions on Windows
 async function safeFetch(url: string, options?: RequestInit): Promise<Response> {
-    return globalThis.fetch(url, options);
+    return tauriFetch(url, options);
 }
 
 export const DEFAULT_API_URL = 'https://api.caissefacile.asmanissieux.fr';
