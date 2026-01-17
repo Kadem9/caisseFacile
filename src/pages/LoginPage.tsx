@@ -149,7 +149,7 @@ export const LoginPage: React.FC = () => {
 
     // Quick close without backup or confirmation
     const handleQuickClose = useCallback(async () => {
-        await getCurrentWindow().close();
+        await invoke('quit_app');
     }, []);
 
     return (

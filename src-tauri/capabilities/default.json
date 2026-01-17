@@ -13,7 +13,8 @@
       "identifier": "fs:scope",
       "allow": [
         "$APPDATA/cached_images/**",
-        "$APPDATA/cached_images"
+        "$APPDATA/cached_images",
+        "$DOCUMENT/**"
       ]
     },
     "fs:allow-exists",

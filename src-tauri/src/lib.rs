@@ -34,6 +34,11 @@ fn shutdown_system() -> Result<(), String> {
     }
 }
 
+#[tauri::command]
+fn quit_app(app: tauri::AppHandle) {
+    app.exit(0);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -58,6 +63,7 @@ pub fn run() {
             test_tpe_connection,
             send_tpe_payment,
             cancel_tpe_transaction,
+            quit_app,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
