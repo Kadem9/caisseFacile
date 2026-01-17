@@ -1,7 +1,7 @@
 // ===================================
 // TPE Module - Ingenico Move/5000 Handler
 // ===================================
-// With file logging for debugging and ENQ handshake
+// Simplified Caisse protocol with file logging
 
 use serde::{Deserialize, Serialize};
 use serialport::SerialPort;
@@ -70,19 +70,19 @@ fn log_to_file(message: &str) {
     }
 }
 
-/// Format bytes as hex string for debugging
+/// Format bytes as hex string
 fn bytes_to_hex(data: &[u8]) -> String {
     data.iter().map(|b| format!("{:02X}", b)).collect::<Vec<_>>().join(" ")
 }
 
-/// Open serial port with safe settings
+/// Open serial port
 fn open_port(port_name: &str, baud_rate: u32, timeout_secs: u64) -> Result<Box<dyn SerialPort>, String> {
-    log_to_file(&format!("Opening port {} at {} baud, timeout {}s", port_name, baud_rate, timeout_secs));
+    log_to_file(&format!("Opening port {} at {} baud", port_name, baud_rate));
     
     serialport::new(port_name, baud_rate)
         .timeout(Duration::from_secs(timeout_secs))
-        .data_bits(serialport::DataBits::Eight)
-        .parity(serialport::Parity::None)
+        .data_bits(serialport::DataBits::Seven) // 7 bits data
+        .parity(serialport::Parity::Even)       // Even parity
         .stop_bits(serialport::StopBits::One)
         .open()
         .map_err(|e| {
@@ -92,7 +92,7 @@ fn open_port(port_name: &str, baud_rate: u32, timeout_secs: u64) -> Result<Box<d
         })
 }
 
-/// Calculate LRC (XOR of all bytes)
+/// Calculate LRC
 fn calculate_lrc(data: &[u8]) -> u8 {
     data.iter().fold(0u8, |acc, &byte| acc ^ byte)
 }
@@ -101,64 +101,57 @@ fn calculate_lrc(data: &[u8]) -> u8 {
 // TPE Commands
 // ===================================
 
-/// Test TPE connection - just checks if port can be opened and sends ENQ
 #[tauri::command]
 pub fn test_tpe_connection(port_name: String, baud_rate: u32) -> TpeTestResult {
     log_to_file(&format!("=== TEST CONNECTION {} ===", port_name));
     
+    // Try with 7E1 (7 data bits, Even parity) - common for Ingenico
     let port_result = open_port(&port_name, baud_rate, 3);
     
     match port_result {
         Ok(mut port) => {
-            log_to_file("Port opened successfully");
+            log_to_file("Port opened (7E1)");
             
             // Send ENQ
             if let Err(e) = port.write_all(&[ENQ]) {
-                log_to_file(&format!("Write ENQ failed: {}", e));
                 return TpeTestResult {
                     connected: false,
-                    message: format!("Port ouvert mais erreur d'écriture: {}", e),
+                    message: format!("Erreur écriture: {}", e),
                     raw_data: None,
                 };
             }
-            log_to_file("ENQ sent (05)");
-            
+            log_to_file("ENQ sent");
             let _ = port.flush();
-            std::thread::sleep(Duration::from_millis(200));
             
-            // Read response
+            std::thread::sleep(Duration::from_millis(300));
+            
             let mut buffer = [0u8; 64];
             match port.read(&mut buffer) {
                 Ok(n) if n > 0 => {
                     let hex = bytes_to_hex(&buffer[..n]);
-                    log_to_file(&format!("Response: {} ({} bytes)", hex, n));
-                    
-                    let is_ack = buffer[0] == ACK;
+                    log_to_file(&format!("Response: {}", hex));
                     
                     TpeTestResult {
                         connected: true,
-                        message: if is_ack {
+                        message: if buffer[0] == ACK {
                             "TPE connecté - ACK reçu ✓".to_string()
                         } else {
-                            format!("TPE répond ({} octets): {}", n, hex)
+                            format!("TPE répond: {}", hex)
                         },
                         raw_data: Some(hex),
                     }
                 }
-                Ok(_) => {
-                    log_to_file("No response (0 bytes)");
-                    TpeTestResult {
-                        connected: true,
-                        message: "Port ouvert, pas de réponse".to_string(),
-                        raw_data: None,
-                    }
-                }
+                Ok(_) => TpeTestResult {
+                    connected: true,
+                    message: "Port ouvert, pas de réponse".to_string(),
+                    raw_data: None,
+                },
                 Err(e) => {
                     log_to_file(&format!("Read error: {}", e));
                     TpeTestResult {
                         connected: e.kind() == std::io::ErrorKind::TimedOut,
                         message: if e.kind() == std::io::ErrorKind::TimedOut {
-                            "Port ouvert, timeout (TPE ne répond pas)".to_string()
+                            "Port ouvert, timeout".to_string()
                         } else {
                             format!("Erreur: {}", e)
                         },
@@ -167,18 +160,49 @@ pub fn test_tpe_connection(port_name: String, baud_rate: u32) -> TpeTestResult {
                 }
             }
         }
-        Err(e) => {
-            log_to_file(&format!("Port open failed: {}", e));
-            TpeTestResult {
-                connected: false,
-                message: e,
-                raw_data: None,
-            }
-        }
+        Err(e) => TpeTestResult {
+            connected: false,
+            message: e,
+            raw_data: None,
+        },
     }
 }
 
-/// Send payment to TPE
+/// Build Telium/Caisse style payment message
+/// This is a simpler format used by many Ingenico terminals
+fn build_payment_message(amount_cents: u32) -> Vec<u8> {
+    // Format: STX + data + ETX + LRC
+    // Data for debit transaction: Transaction type + Amount
+    
+    // Transaction type "00" = Purchase/Debit
+    let tx_type = "00";
+    // Amount in cents, 12 digits with leading zeros
+    let amount = format!("{:012}", amount_cents);
+    // Currency code EUR = 978
+    let currency = "978";
+    // Payment mode: C = Card
+    let payment_mode = "C";
+    // Private field (empty)
+    let private_field = "";
+    
+    // Build data: type(2) + amount(12) + currency(3) + mode(1) + private
+    let data = format!("{}{}{}{}{}", tx_type, amount, currency, payment_mode, private_field);
+    
+    // Calculate LRC on data + ETX
+    let mut lrc_input: Vec<u8> = data.as_bytes().to_vec();
+    lrc_input.push(ETX);
+    let lrc = calculate_lrc(&lrc_input);
+    
+    // Build message
+    let mut msg: Vec<u8> = Vec::new();
+    msg.push(STX);
+    msg.extend_from_slice(data.as_bytes());
+    msg.push(ETX);
+    msg.push(lrc);
+    
+    msg
+}
+
 #[tauri::command]
 pub fn send_tpe_payment(
     port_name: String,
@@ -186,205 +210,193 @@ pub fn send_tpe_payment(
     pos_number: String,
     amount_cents: u32,
 ) -> Result<TpePaymentResponse, String> {
-    log_to_file(&format!("=== PAYMENT {} cents ===", amount_cents));
+    log_to_file(&format!("=== PAYMENT {} cents (pos:{}) ===", amount_cents, pos_number));
     
     let mut port = open_port(&port_name, baud_rate, 5)?;
     
-    // Step 1: Send ENQ and wait for ACK (handshake)
-    log_to_file("Step 1: Sending ENQ for handshake");
-    port.write_all(&[ENQ]).map_err(|e| {
-        log_to_file(&format!("ENQ send failed: {}", e));
-        format!("Erreur envoi ENQ: {}", e)
-    })?;
+    // Step 1: ENQ handshake
+    log_to_file("Step 1: ENQ");
+    port.write_all(&[ENQ]).map_err(|e| format!("ENQ failed: {}", e))?;
+    let _ = port.flush();
+    std::thread::sleep(Duration::from_millis(200));
+    
+    let mut buf = [0u8; 64];
+    let handshake_ok = match port.read(&mut buf) {
+        Ok(n) if n > 0 => {
+            log_to_file(&format!("Handshake response: {}", bytes_to_hex(&buf[..n])));
+            buf[0] == ACK
+        }
+        _ => {
+            log_to_file("No handshake response");
+            false
+        }
+    };
+    
+    if !handshake_ok {
+        log_to_file("Handshake failed, trying direct message anyway");
+    }
+    
+    // Step 2: Build and send payment message
+    let message = build_payment_message(amount_cents);
+    log_to_file(&format!("Step 2: Sending {}", bytes_to_hex(&message)));
+    
+    port.write_all(&message).map_err(|e| format!("Send failed: {}", e))?;
     let _ = port.flush();
     
-    std::thread::sleep(Duration::from_millis(100));
+    // Step 3: Wait for ACK of message
+    log_to_file("Step 3: Waiting for message ACK");
+    std::thread::sleep(Duration::from_millis(500));
     
-    let mut ack_buf = [0u8; 1];
+    let mut ack_buf = [0u8; 64];
     match port.read(&mut ack_buf) {
-        Ok(1) if ack_buf[0] == ACK => {
-            log_to_file("Handshake OK - ACK received");
-        }
-        Ok(1) => {
-            log_to_file(&format!("Unexpected response to ENQ: {:02X}", ack_buf[0]));
-            // Continue anyway
-        }
-        Ok(_) => {
-            log_to_file("No response to ENQ");
-            return Err("TPE ne répond pas au handshake".to_string());
-        }
-        Err(e) => {
-            log_to_file(&format!("ENQ read error: {}", e));
-            return Err(format!("Timeout handshake: {}", e));
-        }
-    }
-    
-    // Step 2: Build and send Concert V2 payment message
-    // Format: STX + data + ETX + LRC
-    // Data: pos_number(2) + amount(8) + mode(1) + currency(3) + private(10)
-    let pos = format!("{:0>2}", &pos_number[..pos_number.len().min(2)]);
-    let amount = format!("{:08}", amount_cents);
-    let mode = "1";       // 1 = card payment
-    let currency = "978"; // EUR
-    let private = "          "; // 10 spaces
-    
-    let data = format!("{}{}{}{}{}", pos, amount, mode, currency, private);
-    log_to_file(&format!("Message data: {}", data));
-    
-    // Calculate LRC (on data + ETX)
-    let mut lrc_input: Vec<u8> = data.as_bytes().to_vec();
-    lrc_input.push(ETX);
-    let lrc = calculate_lrc(&lrc_input);
-    
-    // Build full message
-    let mut message: Vec<u8> = Vec::new();
-    message.push(STX);
-    message.extend_from_slice(data.as_bytes());
-    message.push(ETX);
-    message.push(lrc);
-    
-    log_to_file(&format!("Sending: {}", bytes_to_hex(&message)));
-    
-    port.write_all(&message).map_err(|e| {
-        log_to_file(&format!("Message send failed: {}", e));
-        format!("Erreur envoi message: {}", e)
-    })?;
-    let _ = port.flush();
-    
-    // Step 3: Wait for ACK of message reception
-    log_to_file("Waiting for message ACK...");
-    std::thread::sleep(Duration::from_millis(100));
-    
-    let mut msg_ack = [0u8; 1];
-    match port.read(&mut msg_ack) {
-        Ok(1) => {
-            log_to_file(&format!("Message response: {:02X}", msg_ack[0]));
-            if msg_ack[0] == NAK {
-                return Err("TPE a refusé le message (NAK) - format incorrect".to_string());
+        Ok(n) if n > 0 => {
+            let hex = bytes_to_hex(&ack_buf[..n]);
+            log_to_file(&format!("Message response: {}", hex));
+            
+            // If we get ENQ+EOT, the TPE doesn't understand
+            if ack_buf[0] == ENQ || ack_buf[0] == EOT || ack_buf[0] == NAK {
+                // Try alternate simple format
+                log_to_file("TPE didn't understand, trying alternate format");
+                return try_alternate_format(&mut port, amount_cents);
             }
         }
         Ok(_) => {
-            log_to_file("No ACK for message");
+            log_to_file("No message ACK");
         }
         Err(e) => {
-            log_to_file(&format!("Message ACK error: {}", e));
+            log_to_file(&format!("ACK wait error: {}", e));
             if e.kind() == std::io::ErrorKind::TimedOut {
-                return Err("Timeout - TPE ne répond pas au message".to_string());
+                return Err("Timeout - TPE ne répond pas".to_string());
             }
         }
     }
     
-    // Step 4: Wait for payment completion (long wait)
-    log_to_file("Waiting for payment completion (up to 120s)...");
+    // Step 4: Wait for payment result (long timeout)
+    log_to_file("Step 4: Waiting for payment (120s)...");
     port.set_timeout(Duration::from_secs(120)).ok();
     
-    let mut response_buffer = [0u8; 256];
-    let mut total_read = 0;
+    let mut response = [0u8; 256];
+    let mut total = 0;
     let start = std::time::Instant::now();
     
     loop {
         if start.elapsed().as_secs() > 120 {
-            log_to_file("Payment timeout (120s)");
-            return Err("Timeout - Paiement non complété (120s)".to_string());
+            return Err("Timeout paiement (120s)".to_string());
         }
         
-        match port.read(&mut response_buffer[total_read..]) {
+        match port.read(&mut response[total..]) {
             Ok(n) if n > 0 => {
-                total_read += n;
-                log_to_file(&format!("Received {} bytes, total: {}", n, total_read));
-                
-                // Check for ETX (end of message) or EOT
-                if response_buffer[..total_read].contains(&ETX) 
-                    || response_buffer[..total_read].contains(&EOT) {
-                    log_to_file("End of message marker found");
+                total += n;
+                log_to_file(&format!("Received {} bytes", n));
+                if response[..total].contains(&ETX) || response[..total].contains(&EOT) {
                     break;
                 }
             }
-            Ok(_) => {
-                std::thread::sleep(Duration::from_millis(200));
-            }
+            Ok(_) => std::thread::sleep(Duration::from_millis(200)),
             Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {
-                if total_read > 0 {
-                    break;
-                }
-                continue;
+                if total > 0 { break; }
             }
-            Err(e) => {
-                log_to_file(&format!("Read error: {}", e));
-                return Err(format!("Erreur lecture: {}", e));
-            }
+            Err(e) => return Err(format!("Read error: {}", e)),
         }
     }
     
-    // Send ACK to confirm reception
     let _ = port.write_all(&[ACK]);
     
+    let raw = bytes_to_hex(&response[..total]);
+    log_to_file(&format!("Response: {}", raw));
+    
     // Parse response
-    let raw_hex = bytes_to_hex(&response_buffer[..total_read]);
-    log_to_file(&format!("Full response: {}", raw_hex));
+    parse_response(&response[..total], amount_cents, &raw)
+}
+
+/// Try alternate ASCII format
+fn try_alternate_format(port: &mut Box<dyn SerialPort>, amount_cents: u32) -> Result<TpePaymentResponse, String> {
+    log_to_file("Trying ASCII format: amount in plain text");
     
-    // Find STX and ETX
-    let stx_pos = response_buffer[..total_read].iter().position(|&b| b == STX);
-    let etx_pos = response_buffer[..total_read].iter().position(|&b| b == ETX);
+    // Some TPEs accept plain: "DEBIT 10.00 EUR\r\n"
+    let amount_euros = amount_cents as f64 / 100.0;
+    let message = format!("DEBIT {:.2} EUR\r\n", amount_euros);
     
-    if let (Some(start_idx), Some(end_idx)) = (stx_pos, etx_pos) {
-        if end_idx > start_idx {
-            let body = &response_buffer[start_idx + 1..end_idx];
-            let body_str = String::from_utf8_lossy(body);
-            log_to_file(&format!("Response body: {}", body_str));
+    log_to_file(&format!("Sending: {}", message.trim()));
+    port.write_all(message.as_bytes()).map_err(|e| format!("Send failed: {}", e))?;
+    let _ = port.flush();
+    
+    std::thread::sleep(Duration::from_millis(500));
+    
+    let mut buf = [0u8; 256];
+    match port.read(&mut buf) {
+        Ok(n) if n > 0 => {
+            let hex = bytes_to_hex(&buf[..n]);
+            let text = String::from_utf8_lossy(&buf[..n]);
+            log_to_file(&format!("Alternate response: {} ({})", text.trim(), hex));
             
-            // Parse: pos(2) + result(1) + amount(8) + ...
-            if body.len() >= 11 {
-                let result_char = body_str.chars().nth(2).unwrap_or('9');
-                let success = result_char == '0';
-                
-                log_to_file(&format!("Result: {} (success={})", result_char, success));
+            Ok(TpePaymentResponse {
+                success: false,
+                transaction_result: "?".to_string(),
+                amount_cents,
+                authorization_number: None,
+                error_message: Some(format!("Format non reconnu. Réponse: {}", hex)),
+                raw_response: Some(hex),
+            })
+        }
+        _ => Err("Pas de réponse au format alternatif".to_string()),
+    }
+}
+
+fn parse_response(data: &[u8], amount_cents: u32, raw: &str) -> Result<TpePaymentResponse, String> {
+    // Find STX-ETX block
+    let stx = data.iter().position(|&b| b == STX);
+    let etx = data.iter().position(|&b| b == ETX);
+    
+    if let (Some(s), Some(e)) = (stx, etx) {
+        if e > s {
+            let body = &data[s+1..e];
+            let text = String::from_utf8_lossy(body);
+            log_to_file(&format!("Parsed: {}", text));
+            
+            // Result code in position 2 (after 2 pos bytes)
+            if body.len() >= 3 {
+                let result = body[2];
+                let success = result == b'0';
                 
                 return Ok(TpePaymentResponse {
                     success,
-                    transaction_result: result_char.to_string(),
+                    transaction_result: (result as char).to_string(),
                     amount_cents,
                     authorization_number: None,
-                    error_message: if success { None } else { Some(format!("Code erreur: {}", result_char)) },
-                    raw_response: Some(raw_hex),
+                    error_message: if success { None } else { Some(format!("Code: {}", result as char)) },
+                    raw_response: Some(raw.to_string()),
                 });
             }
         }
     }
     
-    // Fallback
-    if total_read > 0 && response_buffer[0] == ACK {
-        log_to_file("Simple ACK response - treating as success");
+    // Simple ACK = success
+    if !data.is_empty() && data[0] == ACK {
         return Ok(TpePaymentResponse {
             success: true,
             transaction_result: "0".to_string(),
             amount_cents,
             authorization_number: None,
             error_message: None,
-            raw_response: Some(raw_hex),
+            raw_response: Some(raw.to_string()),
         });
     }
     
-    log_to_file("Could not parse response");
     Ok(TpePaymentResponse {
         success: false,
         transaction_result: "?".to_string(),
         amount_cents,
         authorization_number: None,
-        error_message: Some(format!("Réponse non parsée: {}", raw_hex)),
-        raw_response: Some(raw_hex),
+        error_message: Some(format!("Réponse non parsée: {}", raw)),
+        raw_response: Some(raw.to_string()),
     })
 }
 
-/// Cancel ongoing TPE transaction
 #[tauri::command]
 pub fn cancel_tpe_transaction(port_name: String, baud_rate: u32) -> Result<String, String> {
-    log_to_file("=== CANCEL TRANSACTION ===");
+    log_to_file("=== CANCEL ===");
     let mut port = open_port(&port_name, baud_rate, 2)?;
-    
-    port.write_all(&[EOT])
-        .map_err(|e| format!("Erreur d'annulation: {}", e))?;
-    
-    log_to_file("EOT sent");
+    port.write_all(&[EOT]).map_err(|e| format!("Cancel failed: {}", e))?;
     Ok("Annulation envoyée".to_string())
 }
