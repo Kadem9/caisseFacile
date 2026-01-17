@@ -40,6 +40,8 @@ export interface Category {
   icon?: string;
   sortOrder: number;
   isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface CategoryCreateInput {
@@ -48,6 +50,8 @@ export interface CategoryCreateInput {
   icon?: string;
   sortOrder?: number;
   isActive?: boolean;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 // ===================================

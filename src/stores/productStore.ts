@@ -8,10 +8,10 @@ import type { Product, Category, ProductCreateInput, CategoryCreateInput } from 
 
 // Initial mock data for development
 const INITIAL_CATEGORIES: Category[] = [
-    { id: 1, name: 'Boissons', color: '#3b82f6', icon: '🍺', sortOrder: 1, isActive: true },
-    { id: 2, name: 'Snacks', color: '#f59e0b', icon: '🍿', sortOrder: 2, isActive: true },
-    { id: 3, name: 'Repas', color: '#10b981', icon: '🍔', sortOrder: 3, isActive: true },
-    { id: 4, name: 'Desserts', color: '#ec4899', icon: '🍰', sortOrder: 4, isActive: true },
+    { id: 1, name: 'Boissons', color: '#3b82f6', icon: '🍺', sortOrder: 1, isActive: true, createdAt: new Date(), updatedAt: new Date() },
+    { id: 2, name: 'Snacks', color: '#f59e0b', icon: '🍿', sortOrder: 2, isActive: true, createdAt: new Date(), updatedAt: new Date() },
+    { id: 3, name: 'Repas', color: '#10b981', icon: '🍔', sortOrder: 3, isActive: true, createdAt: new Date(), updatedAt: new Date() },
+    { id: 4, name: 'Desserts', color: '#ec4899', icon: '🍰', sortOrder: 4, isActive: true, createdAt: new Date(), updatedAt: new Date() },
 ];
 
 const INITIAL_PRODUCTS: Product[] = [
@@ -194,6 +194,7 @@ export const useProductStore = create<ProductState>()(
             addCategory: (input) => {
                 const { lastCategoryId, categories } = get();
                 const newId = lastCategoryId + 1;
+                const now = new Date();
 
                 const newCategory: Category = {
                     id: newId,
@@ -202,6 +203,8 @@ export const useProductStore = create<ProductState>()(
                     icon: input.icon,
                     sortOrder: input.sortOrder ?? categories.length + 1,
                     isActive: true,
+                    createdAt: now,
+                    updatedAt: now,
                 };
 
                 set({
@@ -209,15 +212,28 @@ export const useProductStore = create<ProductState>()(
                     categories: [...categories, newCategory],
                 });
 
+                // Trigger sync
+                useSyncStore.getState().addToQueue('category', newCategory);
+                useSyncStore.getState().syncAll().catch(console.error);
+
                 return newCategory;
             },
 
             updateCategory: (id, updates) => {
-                set((state) => ({
-                    categories: state.categories.map((c) =>
-                        c.id === id ? { ...c, ...updates } : c
-                    ),
-                }));
+                set((state) => {
+                    const categories = state.categories.map((c) =>
+                        c.id === id ? { ...c, ...updates, updatedAt: new Date() } : c
+                    );
+
+                    const updatedCategory = categories.find(c => c.id === id);
+                    if (updatedCategory) {
+                        // Trigger sync
+                        useSyncStore.getState().addToQueue('category', updatedCategory);
+                        useSyncStore.getState().syncAll().catch(console.error);
+                    }
+
+                    return { categories };
+                });
             },
 
             deleteCategory: (id) => {

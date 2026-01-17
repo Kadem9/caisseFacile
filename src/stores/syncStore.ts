@@ -10,6 +10,7 @@ import {
     syncClosures,
     syncProducts,
     syncMenus,
+    syncCategories,
     syncStockMovements,
     getApiUrl,
     setApiUrl as setApiUrlService,
@@ -23,12 +24,12 @@ import type { Transaction, CashClosure, Product, StockMovement, Menu, Category }
 // Types
 // ===================================
 
-export type SyncEntityType = 'transaction' | 'closure' | 'product' | 'stock_movement' | 'menu';
+export type SyncEntityType = 'transaction' | 'closure' | 'product' | 'stock_movement' | 'menu' | 'category';
 
 export interface SyncQueueItem {
     id: string;
     type: SyncEntityType;
-    data: Transaction | CashClosure | Product | StockMovement | Menu;
+    data: Transaction | CashClosure | Product | StockMovement | Menu | Category;
     createdAt: Date;
     retryCount: number;
     lastError?: string;
@@ -77,7 +78,7 @@ export interface SyncState {
     registerCategoryHandler: (handler: (categories: Category[]) => void) => void;
 
     // Queue management
-    addToQueue: (type: SyncEntityType, data: Transaction | CashClosure | Product | StockMovement | Menu) => void;
+    addToQueue: (type: SyncEntityType, data: Transaction | CashClosure | Product | StockMovement | Menu | Category) => void;
     removeFromQueue: (id: string) => void;
     clearQueue: () => void;
 
@@ -322,6 +323,9 @@ export const useSyncStore = create<SyncState>()(
                         case 'stock_movement':
                             result = await syncStockMovements(items.map(i => i.data as StockMovement));
                             break;
+                        case 'category':
+                            result = await syncCategories(items.map(i => i.data as Category));
+                            break;
                     }
 
                     if (result && result.success) {
@@ -335,14 +339,14 @@ export const useSyncStore = create<SyncState>()(
                     } else {
                         // Increment retry count for failed items
                         logEntry.status = 'error';
-                        logEntry.message = result.error;
+                        logEntry.message = result?.error || 'Unknown error';
 
                         const updatedQueue = get().queue.map(item => {
                             if (items.find(i => i.id === item.id)) {
                                 return {
                                     ...item,
                                     retryCount: item.retryCount + 1,
-                                    lastError: result.error,
+                                    lastError: result?.error || 'Unknown error',
                                 };
                             }
                             return item;
