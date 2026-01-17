@@ -7,12 +7,11 @@
 // Protocol: Concert Standard (8 digits)
 
 use serde::{Deserialize, Serialize};
-use serialport::SerialPort;
 use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
-use tokio::time::sleep;
+// use tokio::time::sleep; // Removed unused import
 
 // ===================================
 // Types
@@ -211,13 +210,26 @@ pub async fn test_tpe_connection(port_name: String, baud_rate: u32) -> TpeTestRe
     }
 }
 
-fn build_payment_message(amount_cents: u32) -> Vec<u8> {
-    let tx_type = "01";
-    let pos_num = "01"; 
-    let amount = format!("{:08}", amount_cents);
-    let private_field = "";
+fn build_payment_message(amount_cents: u32, pos_number: &str) -> Vec<u8> {
+    let tx_type = "01"; // Payment
     
-    let data = format!("{}{}{}{}", tx_type, pos_num, amount, private_field);
+    // Safely handle pos_number to be exactly 2 digits
+    let pos_num = if pos_number.len() >= 2 { 
+        pos_number[..2].to_string() 
+    } else if pos_number.len() == 1 { 
+        format!("0{}", pos_number) 
+    } else { 
+        "01".to_string() 
+    };
+    
+    // Concert V3: 10 digits for amount
+    let amount = format!("{:010}", amount_cents);
+    
+    // Currency code: 978 = EUR
+    let currency = "978"; 
+    
+    let data = format!("{}{}{}{}", tx_type, pos_num, amount, currency);
+    println!("Building Concert message Data (length {}): {}", data.len(), data);
     
     let mut lrc_input: Vec<u8> = data.as_bytes().to_vec();
     lrc_input.push(ETX);
@@ -232,6 +244,51 @@ fn build_payment_message(amount_cents: u32) -> Vec<u8> {
     msg
 }
 
+/// Build a TLV (Type-Length-Value) message for Nepting terminals
+/// Format: TAG(2 chars) + LENGTH(3 digits) + VALUE
+fn build_nepting_tlv_payment(amount_cents: u32, pos_id: &str, transaction_id: &str) -> String {
+    // Helper to create a TLV field
+    fn tlv(tag: &str, value: &str) -> String {
+        format!("{}{:03}{}", tag, value.len(), value)
+    }
+    
+    let mut msg = String::new();
+    
+    // PT = Protocol version (must be first)
+    msg.push_str(&tlv("PT", "001"));
+    
+    // OP = Operation type (PAY = payment)
+    msg.push_str(&tlv("OP", "PAY"));
+    
+    // AM = Amount in smallest currency unit (centimes)
+    let amount_str = format!("{}", amount_cents);
+    msg.push_str(&tlv("AM", &amount_str));
+    
+    // CU = Currency (ISO 4217: EUR)
+    msg.push_str(&tlv("CU", "EUR"));
+    
+    // CR = Cash Register ID
+    let cr_id = if pos_id.is_empty() { "P1" } else { pos_id };
+    msg.push_str(&tlv("CR", cr_id));
+    
+    // TI = Transaction ID (unique identifier)
+    let tx_id = if transaction_id.is_empty() { 
+        format!("TX{}", std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() % 1000000)
+    } else { 
+        transaction_id.to_string() 
+    };
+    msg.push_str(&tlv("TI", &tx_id));
+    
+    // Add newline terminator (common for text-based APIs)
+    msg.push('\n');
+    
+    println!("Built Nepting TLV message ({}bytes): {}", msg.len(), msg.trim());
+    msg
+}
+
 #[tauri::command]
 pub async fn send_tpe_payment(
     port_name: String,
@@ -241,7 +298,7 @@ pub async fn send_tpe_payment(
 ) -> Result<TpePaymentResponse, String> {
     log_to_file(&format!("=== PAY {} cents on {} ===", amount_cents, port_name));
     
-    // Explicit ASCII mode requested
+    // Explicit ASCII mode requested (legacy fallback)
     if port_name.ends_with("+ASCII") {
         let clean_port = port_name.replace("+ASCII", "");
         return tokio::task::spawn_blocking(move || {
@@ -249,6 +306,9 @@ pub async fn send_tpe_payment(
              try_alternate_format(&mut stream, amount_cents)
          }).await.map_err(|e| format!("Thread error: {}", e))?;
     }
+    
+    // All connections use Concert V3 protocol (both TCP and Serial)
+    println!("--- CONCERT V3 MODE ---");
 
     let result = tokio::task::spawn_blocking(move || {
         let mut stream = connect(&port_name, baud_rate)?;
@@ -259,17 +319,30 @@ pub async fn send_tpe_payment(
         std::thread::sleep(Duration::from_millis(200));
         
         let mut buf = [0u8; 64];
-        let handshake_ok = match stream.read(&mut buf) {
-            Ok(n) if n > 0 => buf[0] == ACK,
-            _ => false
+        let handshake_res = match stream.read(&mut buf) {
+            Ok(n) if n > 0 => {
+                let hex = bytes_to_hex(&buf[..n]);
+                println!("Handshake received: {}", hex);
+                Some(buf[0])
+            },
+            _ => None
         };
         
-        if !handshake_ok {
-            log_to_file("Handshake failed, forcing message");
+        if handshake_res != Some(ACK) {
+            println!("Handshake NOT ACK (expected 06, got {:?})", handshake_res);
+            if handshake_res == Some(ENQ) {
+                println!("TPE sent ENQ, replying with ACK...");
+                let _ = stream.write_all(&[ACK]);
+                let _ = stream.flush();
+                std::thread::sleep(Duration::from_millis(200));
+            }
+        } else {
+            println!("Handshake OK (ACK received)");
         }
         
         // Step 2: Send Message
-        let message = build_payment_message(amount_cents);
+        let message = build_payment_message(amount_cents, &pos_number);
+        println!("Sending standard message: {}", bytes_to_hex(&message));
         stream.write_all(&message).map_err(|e| format!("Send failed: {}", e))?;
         let _ = stream.flush();
         
@@ -278,13 +351,28 @@ pub async fn send_tpe_payment(
         let mut ack_buf = [0u8; 64];
         match stream.read(&mut ack_buf) {
             Ok(n) if n > 0 => {
-                 // If format rejected (ENQ, EOT, NAK), try alternate format
-                 if ack_buf[0] == ENQ || ack_buf[0] == EOT || ack_buf[0] == NAK {
+                 let raw = bytes_to_hex(&ack_buf[..n]);
+                 println!("ACK step received: {}", raw);
+                 
+                 // If TPE sends ENQ, it might expect an ACK from POS
+                 if ack_buf[0] == ENQ && n == 1 {
+                    println!("TPE sent ENQ, replying with ACK...");
+                    let _ = stream.write_all(&[ACK]);
+                    let _ = stream.flush();
+                    // Optionally wait a bit more for a real ACK or proceed to Step 4
+                 }
+
+                 // If format rejected (ENQ EOT or NAK), try alternate format
+                 if (ack_buf[0] == ENQ || ack_buf[0] == EOT || ack_buf[0] == NAK) && !port_name.ends_with("+ASCII") {
                     log_to_file("Standard format rejected, trying simple ASCII");
+                    println!("Standard format rejected ({}). Attempting ASCII fallback...", raw);
                     return try_alternate_format(&mut stream, amount_cents);
                 }
             }
-            _ => log_to_file("No ACK received"),
+            _ => {
+                log_to_file("No ACK received");
+                println!("No ACK received after message");
+            }
         }
         
         // Step 4: Wait for Response (120s)
@@ -300,24 +388,44 @@ pub async fn send_tpe_payment(
         
         loop {
             if start.elapsed().as_secs() > 120 {
+                println!("Timeout waiting for payment response (120s)");
                 return Err("Timeout (120s)".to_string());
             }
             
             match stream.read(&mut response[total..]) {
                 Ok(n) if n > 0 => {
+                    let chunk = &response[total..total+n];
+                    let current_raw = bytes_to_hex(chunk);
+                    println!("Received data chunk: {}", current_raw);
+                    
+                    // CRITICAL: If TPE sends ENQ, it's asking if we are ready to receive the response.
+                    // We must reply with ACK (06).
+                    if chunk.contains(&ENQ) {
+                        println!("TPE sent ENQ in response loop, replying with ACK...");
+                        let _ = stream.write_all(&[ACK]).ok();
+                        let _ = stream.flush().ok();
+                        // Don't break, wait for the actual STX...ETX data
+                    }
+
                     total += n;
-                    if response[..total].contains(&ETX) || response[..total].contains(&EOT) {
+                    
+                    // Stop if we have a full message or terminal aborts
+                    if response[..total].contains(&ETX) {
+                        println!("End of response message detected (ETX)");
+                        break;
+                    }
+                    
+                    if response[..total].contains(&EOT) && !response[..total].contains(&STX) {
+                        println!("Terminal sent EOT (Abort/End) without data.");
                         break;
                     }
                 }
                 Ok(_) => std::thread::sleep(Duration::from_millis(200)),
                 Err(e) => {
-                     // check for timeout error kind
                      if e.kind() == std::io::ErrorKind::TimedOut || e.kind() == std::io::ErrorKind::WouldBlock {
-                         // continue waiting if we haven't hit 120s global limit
-                         if total > 0 { break; } // if we have partial data, maybe assume done?
                          continue;
                      }
+                     println!("Read error during payment: {}", e);
                      return Err(format!("Read error: {}", e));
                 }
             }
@@ -326,6 +434,7 @@ pub async fn send_tpe_payment(
         let _ = stream.write_all(&[ACK]);
         
         let raw = bytes_to_hex(&response[..total]);
+        println!("Final raw response from TPE: {}", raw);
         log_to_file(&format!("Data: {}", raw));
         parse_response(&response[..total], amount_cents, &raw)
     }).await;
@@ -369,6 +478,141 @@ fn parse_response(data: &[u8], amount_cents: u32, raw: &str) -> Result<TpePaymen
     })
 }
 
+/// Send payment using Nepting TLV protocol (for TCP connections)
+fn send_nepting_payment(address: &str, amount_cents: u32, pos_id: &str) -> Result<TpePaymentResponse, String> {
+    log_to_file(&format!("Nepting payment: {} cents to {}", amount_cents, address));
+    
+    // Build TLV message
+    let tlv_message = build_nepting_tlv_payment(amount_cents, pos_id, "");
+    
+    // Connect to terminal
+    let clean_addr = address.trim_end_matches("+ASCII");
+    let mut stream = TcpStream::connect_timeout(
+        &clean_addr.parse().map_err(|e| format!("Invalid IP: {}", e))?,
+        Duration::from_secs(3)
+    ).map_err(|e| format!("TCP connection failed: {}", e))?;
+    
+    stream.set_read_timeout(Some(Duration::from_secs(120))).ok();
+    stream.set_write_timeout(Some(Duration::from_secs(5))).ok();
+    
+    // Send TLV message (no ENQ/ACK handshake needed)
+    println!("Sending TLV: {}", tlv_message);
+    stream.write_all(tlv_message.as_bytes())
+        .map_err(|e| format!("Send TLV failed: {}", e))?;
+    stream.flush().ok();
+    
+    // Wait for response
+    println!("Waiting for Nepting response...");
+    let mut response_buf = [0u8; 1024];
+    let mut total = 0;
+    let start = std::time::Instant::now();
+    
+    // Give the terminal time to process the request
+    std::thread::sleep(Duration::from_millis(500));
+    
+    loop {
+        if start.elapsed().as_secs() > 120 {
+            println!("Timeout! Total bytes received: {}", total);
+            return Err("Timeout waiting for Nepting response (120s)".to_string());
+        }
+        
+        match stream.read(&mut response_buf[total..]) {
+            Ok(n) if n > 0 => {
+                let raw_hex = bytes_to_hex(&response_buf[total..total+n]);
+                total += n;
+                let current = String::from_utf8_lossy(&response_buf[..total]);
+                println!("Nepting chunk ({} bytes): HEX={} TEXT={}", n, raw_hex, current.trim());
+                
+                // Check if we have a complete response (contains RC = Response Code)
+                if current.contains("RC") {
+                    println!("Complete response received");
+                    break;
+                }
+            }
+            Ok(_) => {
+                // Empty read - wait a bit and continue
+                if total > 0 {
+                    println!("Empty read after {} bytes total", total);
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(200));
+            }
+            Err(e) => {
+                if e.kind() == std::io::ErrorKind::TimedOut || e.kind() == std::io::ErrorKind::WouldBlock {
+                    if total > 0 { 
+                        println!("Timeout/WouldBlock after {} bytes - assuming complete", total);
+                        break; 
+                    }
+                    continue;
+                }
+                println!("Read error: {} (total received: {})", e, total);
+                return Err(format!("Read error: {}", e));
+            }
+        }
+    }
+    
+    let response_str = String::from_utf8_lossy(&response_buf[..total]).to_string();
+    println!("Final Nepting response: {}", response_str);
+    log_to_file(&format!("Nepting response: {}", response_str));
+    
+    // Parse TLV response - look for RC (Response Code)
+    // RC003000 = Success (code "000")
+    // RC003007 = Error 007
+    if let Some(rc_pos) = response_str.find("RC") {
+        let after_rc = &response_str[rc_pos + 2..];
+        if after_rc.len() >= 6 {
+            let len_str = &after_rc[0..3];
+            if let Ok(len) = len_str.parse::<usize>() {
+                if after_rc.len() >= 3 + len {
+                    let code = &after_rc[3..3+len];
+                    println!("Nepting Response Code: {}", code);
+                    
+                    if code == "000" || code == "00" || code == "0" {
+                        return Ok(TpePaymentResponse {
+                            success: true,
+                            transaction_result: "0".to_string(),
+                            amount_cents,
+                            authorization_number: None,
+                            error_message: None,
+                            raw_response: Some(response_str),
+                        });
+                    } else {
+                        return Ok(TpePaymentResponse {
+                            success: false,
+                            transaction_result: code.to_string(),
+                            amount_cents,
+                            authorization_number: None,
+                            error_message: Some(format!("Nepting error code: {}", code)),
+                            raw_response: Some(response_str),
+                        });
+                    }
+                }
+            }
+        }
+    }
+    
+    // If no RC found, check for simple OK/KO
+    if response_str.contains("OK") {
+        return Ok(TpePaymentResponse {
+            success: true,
+            transaction_result: "OK".to_string(),
+            amount_cents,
+            authorization_number: None,
+            error_message: None,
+            raw_response: Some(response_str),
+        });
+    }
+    
+    Ok(TpePaymentResponse {
+        success: false,
+        transaction_result: "?".to_string(),
+        amount_cents,
+        authorization_number: None,
+        error_message: Some(format!("Nepting response: {}", response_str)),
+        raw_response: Some(response_str),
+    })
+}
+
 #[tauri::command]
 pub async fn cancel_tpe_transaction(port_name: String, baud_rate: u32) -> Result<String, String> {
     let result = tokio::task::spawn_blocking(move || {
@@ -386,6 +630,7 @@ pub async fn cancel_tpe_transaction(port_name: String, baud_rate: u32) -> Result
 /// Try alternate ASCII format (Simple "DEBIT X.XX EUR")
 fn try_alternate_format(stream: &mut Box<dyn TpeStream>, amount_cents: u32) -> Result<TpePaymentResponse, String> {
     log_to_file("Trying ASCII format: amount in plain text");
+    println!("--- FALLBACK ASCII MODE ---");
     
     // Some TPEs accept plain: "DEBIT 10.00 EUR\r\n"
     let amount_euros = amount_cents as f64 / 100.0;
@@ -393,7 +638,9 @@ fn try_alternate_format(stream: &mut Box<dyn TpeStream>, amount_cents: u32) -> R
     let message = format!("DEBIT {:.2} EUR\r", amount_euros); 
     
     log_to_file(&format!("Sending fallback: {}", message.trim()));
+    println!("Sending ASCII: \"{}\"", message.escape_debug());
     if let Err(e) = stream.write_all(message.as_bytes()) {
+        println!("Error sending ASCII: {}", e);
         return Ok(TpePaymentResponse {
             success: false,
             transaction_result: "?".to_string(),
@@ -405,6 +652,7 @@ fn try_alternate_format(stream: &mut Box<dyn TpeStream>, amount_cents: u32) -> R
     }
     let _ = stream.flush();
     
+    println!("Waiting for ASCII response...");
     std::thread::sleep(Duration::from_millis(500));
     
     // Wait for response to ASCII command
@@ -414,6 +662,7 @@ fn try_alternate_format(stream: &mut Box<dyn TpeStream>, amount_cents: u32) -> R
             let hex = bytes_to_hex(&buf[..n]);
             let text = String::from_utf8_lossy(&buf[..n]);
             log_to_file(&format!("Alternate response: {} ({})", text.trim(), hex));
+            println!("Received ASCII response: {} ({})", text.trim(), hex);
             
             // If we get simple "OK" or similar, consider generic success or just return raw for user to see
             // Usually returns status
@@ -427,6 +676,9 @@ fn try_alternate_format(stream: &mut Box<dyn TpeStream>, amount_cents: u32) -> R
                 raw_response: Some(format!("ASCII: {} | HEX: {}", text.trim(), hex)),
             })
         }
-        _ => Err("Pas de réponse au format alternatif".to_string()),
+        _ => {
+            println!("No response to ASCII fallback.");
+            Err("Pas de réponse au format alternatif".to_string())
+        }
     }
 }

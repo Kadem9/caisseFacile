@@ -937,10 +937,10 @@ app.get('/api/sync/diff', (req, res) => {
             };
         });
 
-        // Get updated categories
+        // Get updated categories (return local_id as id for client compatibility)
         const categories = db.prepare(`
             SELECT 
-                id, local_id as localId, name, color, icon,
+                local_id as id, local_id as localId, name, color, icon,
                 sort_order as sortOrder, is_active as isActive,
                 created_at as createdAt, updated_at as updatedAt
             FROM categories 
