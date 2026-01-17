@@ -168,6 +168,7 @@ export const useSyncStore = create<SyncState>()(
                     retryCount: 0,
                 };
 
+                console.log(`[Sync] Adding to queue: ${type}`, data);
                 set({ queue: [...queue, newItem] });
             },
 
@@ -239,6 +240,7 @@ export const useSyncStore = create<SyncState>()(
 
                     // Handle categories
                     const categories = result.categories || [];
+                    console.log('[Sync] Received categories from server:', categories.length, categories);
                     if (categories.length > 0) {
                         const handler = get().categoryMergeHandler;
                         if (handler) {
@@ -282,6 +284,7 @@ export const useSyncStore = create<SyncState>()(
                     await get().syncEntity('product');
                     await get().syncEntity('menu');
                     await get().syncEntity('stock_movement');
+                    await get().syncEntity('category');
 
                     set({ lastSyncAt: new Date() });
                 } finally {
@@ -324,7 +327,9 @@ export const useSyncStore = create<SyncState>()(
                             result = await syncStockMovements(items.map(i => i.data as StockMovement));
                             break;
                         case 'category':
+                            console.log('[Sync] Syncing categories:', items.map(i => i.data));
                             result = await syncCategories(items.map(i => i.data as Category));
+                            console.log('[Sync] syncCategories result:', result);
                             break;
                     }
 

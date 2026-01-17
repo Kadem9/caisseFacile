@@ -1,7 +1,27 @@
 // ===================================
 // API Service - HTTP Client Configuration
 // ===================================
-import { fetch } from '@tauri-apps/plugin-http';
+
+// Use Tauri fetch if available, otherwise use native browser fetch
+let tauriFetch: typeof globalThis.fetch | null = null;
+try {
+    // Dynamic import to avoid errors in browser environment
+    if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+        import('@tauri-apps/plugin-http').then(module => {
+            tauriFetch = module.fetch;
+        }).catch(() => {
+            console.log('[API] Tauri HTTP plugin not available, using native fetch');
+        });
+    }
+} catch {
+    console.log('[API] Not in Tauri environment, using native fetch');
+}
+
+// Wrapper function that uses the appropriate fetch
+async function safeFetch(url: string, options?: RequestInit): Promise<Response> {
+    const fetchFn = tauriFetch || globalThis.fetch;
+    return fetchFn(url, options);
+}
 
 export const DEFAULT_API_URL = 'https://api.caissefacile.asmanissieux.fr';
 
@@ -9,7 +29,7 @@ export const DEFAULT_API_URL = 'https://api.caissefacile.asmanissieux.fr';
 export function getApiUrl(): string {
     // Force localhost for local development regardless of localStorage
     if (import.meta.env.DEV) {
-        return 'http://127.0.0.1:3001';
+        return 'http://localhost:3001';
     }
 
     if (typeof window !== 'undefined') {
@@ -56,7 +76,7 @@ async function apiRequest<T>(
             ...options.headers,
         };
 
-        const response = await fetch(url, {
+        const response = await safeFetch(url, {
             ...options,
             headers: headers,
         });

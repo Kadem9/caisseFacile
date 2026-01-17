@@ -581,6 +581,7 @@ app.post('/api/sync/products', (req, res) => {
 app.post('/api/sync/categories', (req, res) => {
     try {
         const { categories } = req.body;
+        console.log('[Backend] Received categories to sync:', categories);
         if (!Array.isArray(categories)) {
             return res.status(400).json({ error: 'Invalid categories array' });
         }
@@ -952,6 +953,8 @@ app.get('/api/sync/diff', (req, res) => {
             ...c,
             isActive: Boolean(c.isActive)
         }));
+
+        console.log('[Backend] /sync/diff returning categories:', categoriesFormatted.length, categoriesFormatted);
 
         res.json({
             ts: new Date().toISOString(),
