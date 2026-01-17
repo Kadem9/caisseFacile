@@ -69,11 +69,12 @@ trait TpeStream: Read + Write + Send {}
 impl<T: Read + Write + Send> TpeStream for T {}
 
 fn connect(connection_str: &str, baud_rate: u32) -> Result<Box<dyn TpeStream>, String> {
+    let clean_str = connection_str.trim_end_matches("+ASCII");
     // Check if it's an IP address (contains ':')
-    if connection_str.contains(':') {
-        connect_tcp(connection_str)
+    if clean_str.contains(':') {
+        connect_tcp(clean_str)
     } else {
-        connect_serial(connection_str, baud_rate)
+        connect_serial(clean_str, baud_rate)
     }
 }
 
@@ -240,6 +241,15 @@ pub async fn send_tpe_payment(
 ) -> Result<TpePaymentResponse, String> {
     log_to_file(&format!("=== PAY {} cents on {} ===", amount_cents, port_name));
     
+    // Explicit ASCII mode requested
+    if port_name.ends_with("+ASCII") {
+        let clean_port = port_name.replace("+ASCII", "");
+        return tokio::task::spawn_blocking(move || {
+             let mut stream = connect(&clean_port, baud_rate)?;
+             try_alternate_format(&mut stream, amount_cents)
+         }).await.map_err(|e| format!("Thread error: {}", e))?;
+    }
+
     let result = tokio::task::spawn_blocking(move || {
         let mut stream = connect(&port_name, baud_rate)?;
         
