@@ -732,19 +732,39 @@ export const SettingsPage: React.FC = () => {
                                             />
                                         </div>
                                         <div className="settings-form__group">
-                                            <label className="settings-form__label">Port COM</label>
-                                            <select
-                                                className="settings-form__select"
-                                                value={tpeConfig.devices[0].port}
-                                                onChange={(e) => updateTpeDevice(0, { port: e.target.value })}
-                                            >
-                                                <option value="">Sélectionner...</option>
-                                                {ports.map(p => (
-                                                    <option key={p.name} value={p.name}>
-                                                        {p.name} ({p.port_type})
-                                                    </option>
-                                                ))}
-                                            </select>
+                                            <label className="settings-form__label">Connexion</label>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
+                                                <select
+                                                    className="settings-form__select"
+                                                    value={tpeConfig.devices[0].port.includes(':') ? 'ip' : tpeConfig.devices[0].port}
+                                                    onChange={(e) => {
+                                                        if (e.target.value === 'ip') {
+                                                            // Default IP placeholder
+                                                            updateTpeDevice(0, { port: '192.168.1.50:8888' });
+                                                        } else {
+                                                            updateTpeDevice(0, { port: e.target.value });
+                                                        }
+                                                    }}
+                                                >
+                                                    <option value="">Sélectionner port...</option>
+                                                    {ports.map(p => (
+                                                        <option key={p.name} value={p.name}>
+                                                            {p.name} ({p.port_type})
+                                                        </option>
+                                                    ))}
+                                                    <option value="ip">🌐 Réseau (WiFi/Ethernet)</option>
+                                                </select>
+
+                                                {(tpeConfig.devices[0].port.includes(':') || tpeConfig.devices[0].port === 'ip') && (
+                                                    <input
+                                                        type="text"
+                                                        className="settings-form__input"
+                                                        value={tpeConfig.devices[0].port}
+                                                        onChange={(e) => updateTpeDevice(0, { port: e.target.value })}
+                                                        placeholder="IP:PORT (ex: 192.168.1.50:8888)"
+                                                    />
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                     <div className="settings-form__row">
@@ -809,19 +829,38 @@ export const SettingsPage: React.FC = () => {
                                             />
                                         </div>
                                         <div className="settings-form__group">
-                                            <label className="settings-form__label">Port COM</label>
-                                            <select
-                                                className="settings-form__select"
-                                                value={tpeConfig.devices[1].port}
-                                                onChange={(e) => updateTpeDevice(1, { port: e.target.value })}
-                                            >
-                                                <option value="">Sélectionner...</option>
-                                                {ports.map(p => (
-                                                    <option key={p.name} value={p.name}>
-                                                        {p.name} ({p.port_type})
-                                                    </option>
-                                                ))}
-                                            </select>
+                                            <label className="settings-form__label">Connexion</label>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
+                                                <select
+                                                    className="settings-form__select"
+                                                    value={tpeConfig.devices[1].port.includes(':') ? 'ip' : tpeConfig.devices[1].port}
+                                                    onChange={(e) => {
+                                                        if (e.target.value === 'ip') {
+                                                            updateTpeDevice(1, { port: '192.168.1.50:8888' });
+                                                        } else {
+                                                            updateTpeDevice(1, { port: e.target.value });
+                                                        }
+                                                    }}
+                                                >
+                                                    <option value="">Sélectionner port...</option>
+                                                    {ports.map(p => (
+                                                        <option key={p.name} value={p.name}>
+                                                            {p.name} ({p.port_type})
+                                                        </option>
+                                                    ))}
+                                                    <option value="ip">🌐 Réseau (WiFi/Ethernet)</option>
+                                                </select>
+
+                                                {(tpeConfig.devices[1].port.includes(':') || tpeConfig.devices[1].port === 'ip') && (
+                                                    <input
+                                                        type="text"
+                                                        className="settings-form__input"
+                                                        value={tpeConfig.devices[1].port}
+                                                        onChange={(e) => updateTpeDevice(1, { port: e.target.value })}
+                                                        placeholder="IP:PORT (ex: 192.168.1.51:8888)"
+                                                    />
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                     <div className="settings-form__row">
