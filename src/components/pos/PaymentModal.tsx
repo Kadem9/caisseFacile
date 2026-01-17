@@ -202,14 +202,13 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
         if (selectedMethod === 'card') {
             setStep('card');
-            // Auto-send to TPE when card is selected
-            sendToTpe(Math.round(totalAmount * 100));
+            // Don't auto-send - let user click the button to avoid crashes
         } else if (selectedMethod === 'mixed') {
             setStep('mixed');
         } else {
             setStep('cash');
         }
-    }, [totalAmount, sendToTpe]);
+    }, []);
 
 
     const handleDigitPress = useCallback((digit: string) => {

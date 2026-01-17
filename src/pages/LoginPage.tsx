@@ -147,6 +147,11 @@ export const LoginPage: React.FC = () => {
         }
     }, [transactions]);
 
+    // Quick close without backup or confirmation
+    const handleQuickClose = useCallback(async () => {
+        await getCurrentWindow().close();
+    }, []);
+
     return (
         <div className="login-page">
             {/* Left Brand Panel */}
@@ -169,6 +174,15 @@ export const LoginPage: React.FC = () => {
 
             {/* Right Content Panel */}
             <div className="login-page__content-panel">
+                {/* Quick Close Button */}
+                <button
+                    className="login-page__quick-close"
+                    onClick={handleQuickClose}
+                    type="button"
+                    title="Fermer rapidement"
+                >
+                    <XIcon size={20} />
+                </button>
                 <main className="login-page__content">
                     {!selectedUser ? (
                         <section className="login-page__users">

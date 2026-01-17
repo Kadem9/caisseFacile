@@ -277,6 +277,34 @@ export const SettingsPage: React.FC = () => {
         });
     };
 
+    // Test payment (1 centime) to verify TPE communication
+    const handleTestPayment = useCallback(async (deviceIndex: number) => {
+        setIsTpeTesting(deviceIndex);
+        setTpeTestResult(null);
+        const device = tpeConfig.devices[deviceIndex];
+        try {
+            const result = await invoke<{ success: boolean; transaction_result: string; error_message?: string }>('send_tpe_payment', {
+                portName: device.port,
+                baudRate: device.baudRate,
+                posNumber: device.posNumber,
+                amountCents: 1, // 1 centime test
+            });
+            setTpeTestResult({
+                deviceIndex,
+                type: result.success ? 'success' : 'error',
+                message: result.success ? 'Test paiement réussi ! (1 centime)' : (result.error_message || 'Test échoué'),
+            });
+        } catch (err) {
+            setTpeTestResult({
+                deviceIndex,
+                type: 'error',
+                message: String(err),
+            });
+        } finally {
+            setIsTpeTesting(null);
+        }
+    }, [tpeConfig.devices]);
+
 
     const handleCheckConnection = useCallback(async () => {
         setIsCheckingSync(true);
@@ -744,13 +772,18 @@ export const SettingsPage: React.FC = () => {
                                             />
                                         </div>
                                     </div>
-                                    <Button onClick={() => handleTestTpe(0)} disabled={isTpeTesting === 0}>
-                                        {isTpeTesting === 0 ? (
-                                            <><RefreshIcon size={16} className="mr-2 animate-spin" /> Test en cours...</>
-                                        ) : (
-                                            <><CheckIcon size={16} className="mr-2" /> Tester la connexion</>
-                                        )}
-                                    </Button>
+                                    <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                                        <Button onClick={() => handleTestTpe(0)} disabled={isTpeTesting === 0}>
+                                            {isTpeTesting === 0 ? (
+                                                <><RefreshIcon size={16} className="mr-2 animate-spin" /> Test en cours...</>
+                                            ) : (
+                                                <><CheckIcon size={16} className="mr-2" /> Tester connexion</>
+                                            )}
+                                        </Button>
+                                        <Button onClick={() => handleTestPayment(0)} disabled={isTpeTesting === 0} variant="secondary">
+                                            <CardIcon size={16} className="mr-2" /> Test paiement (1c)
+                                        </Button>
+                                    </div>
                                     {tpeTestResult && tpeTestResult.deviceIndex === 0 && (
                                         <div className={`settings-alert settings-alert--${tpeTestResult.type}`} style={{ marginTop: '10px' }}>
                                             {tpeTestResult.type === 'success' ? <CheckIcon size={16} /> : <XIcon size={16} />}
@@ -816,13 +849,18 @@ export const SettingsPage: React.FC = () => {
                                             />
                                         </div>
                                     </div>
-                                    <Button onClick={() => handleTestTpe(1)} disabled={isTpeTesting === 1}>
-                                        {isTpeTesting === 1 ? (
-                                            <><RefreshIcon size={16} className="mr-2 animate-spin" /> Test en cours...</>
-                                        ) : (
-                                            <><CheckIcon size={16} className="mr-2" /> Tester la connexion</>
-                                        )}
-                                    </Button>
+                                    <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                                        <Button onClick={() => handleTestTpe(1)} disabled={isTpeTesting === 1}>
+                                            {isTpeTesting === 1 ? (
+                                                <><RefreshIcon size={16} className="mr-2 animate-spin" /> Test en cours...</>
+                                            ) : (
+                                                <><CheckIcon size={16} className="mr-2" /> Tester connexion</>
+                                            )}
+                                        </Button>
+                                        <Button onClick={() => handleTestPayment(1)} disabled={isTpeTesting === 1} variant="secondary">
+                                            <CardIcon size={16} className="mr-2" /> Test paiement (1c)
+                                        </Button>
+                                    </div>
                                     {tpeTestResult && tpeTestResult.deviceIndex === 1 && (
                                         <div className={`settings-alert settings-alert--${tpeTestResult.type}`} style={{ marginTop: '10px' }}>
                                             {tpeTestResult.type === 'success' ? <CheckIcon size={16} /> : <XIcon size={16} />}
