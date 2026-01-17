@@ -268,16 +268,10 @@ pub async fn send_tpe_payment(
         let mut ack_buf = [0u8; 64];
         match stream.read(&mut ack_buf) {
             Ok(n) if n > 0 => {
+                 // If format rejected (ENQ, EOT, NAK), try alternate format
                  if ack_buf[0] == ENQ || ack_buf[0] == EOT || ack_buf[0] == NAK {
-                    // Fail fast if format rejected
-                    return Ok(TpePaymentResponse {
-                        success: false,
-                        transaction_result: "Format Rejected".to_string(),
-                        amount_cents,
-                        authorization_number: None,
-                        error_message: Some("TPE rejected message format (NAK/EOT)".to_string()),
-                        raw_response: Some(bytes_to_hex(&ack_buf[..n])),
-                    });
+                    log_to_file("Standard format rejected, trying simple ASCII");
+                    return try_alternate_format(&mut stream, amount_cents);
                 }
             }
             _ => log_to_file("No ACK received"),
@@ -376,5 +370,53 @@ pub async fn cancel_tpe_transaction(port_name: String, baud_rate: u32) -> Result
     match result {
         Ok(res) => res,
         Err(e) => Err(format!("Thread error: {}", e))
+    }
+}
+
+/// Try alternate ASCII format (Simple "DEBIT X.XX EUR")
+fn try_alternate_format(stream: &mut Box<dyn TpeStream>, amount_cents: u32) -> Result<TpePaymentResponse, String> {
+    log_to_file("Trying ASCII format: amount in plain text");
+    
+    // Some TPEs accept plain: "DEBIT 10.00 EUR\r\n"
+    let amount_euros = amount_cents as f64 / 100.0;
+    // Using \r (CR) is standard for line ending in serial
+    let message = format!("DEBIT {:.2} EUR\r", amount_euros); 
+    
+    log_to_file(&format!("Sending fallback: {}", message.trim()));
+    if let Err(e) = stream.write_all(message.as_bytes()) {
+        return Ok(TpePaymentResponse {
+            success: false,
+            transaction_result: "?".to_string(),
+            amount_cents,
+            authorization_number: None,
+            error_message: Some(format!("Send fallback failed: {}", e)),
+            raw_response: None,
+        });
+    }
+    let _ = stream.flush();
+    
+    std::thread::sleep(Duration::from_millis(500));
+    
+    // Wait for response to ASCII command
+    let mut buf = [0u8; 256];
+    match stream.read(&mut buf) {
+        Ok(n) if n > 0 => {
+            let hex = bytes_to_hex(&buf[..n]);
+            let text = String::from_utf8_lossy(&buf[..n]);
+            log_to_file(&format!("Alternate response: {} ({})", text.trim(), hex));
+            
+            // If we get simple "OK" or similar, consider generic success or just return raw for user to see
+            // Usually returns status
+            
+            Ok(TpePaymentResponse {
+                success: false, // Assume false unless we parse specific success char, let user decide based on display
+                transaction_result: "?".to_string(),
+                amount_cents,
+                authorization_number: None,
+                error_message: Some(format!("Mode ASCII utilisé. Réponse: {}", text.trim())),
+                raw_response: Some(format!("ASCII: {} | HEX: {}", text.trim(), hex)),
+            })
+        }
+        _ => Err("Pas de réponse au format alternatif".to_string()),
     }
 }
