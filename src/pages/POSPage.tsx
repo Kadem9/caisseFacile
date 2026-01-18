@@ -176,68 +176,49 @@ export const POSPage: React.FC = () => {
                     }
                 }
 
-                // 2. Print kitchen label if any product has printTicket = true
-                const kitchenItems = items.filter(item => item.product.printTicket === true);
-                if (kitchenItems.length > 0 && printerName) {
-                    try {
-                        const { invoke } = await import('@tauri-apps/api/core');
-                        // Build a simple kitchen label receipt
-                        const kitchenReceipt = {
-                            header: '🍳 CUISINE',
-                            items: kitchenItems.map(item => ({
-                                name: item.product.name,
-                                quantity: item.quantity,
-                                unit_price: item.product.price,
-                                subtotal: item.product.price * item.quantity,
-                            })),
-                            total: kitchenItems.reduce((sum, item) => sum + (item.product.price * item.quantity), 0),
-                            payment_method: 'N/A',
-                            footer: 'Étiquette cuisine',
-                            transaction_id: transaction.id,
-                            date: new Date().toLocaleString('fr-FR'),
-                        };
-                        await invoke('print_via_driver', {
-                            printerName,
-                            receipt: kitchenReceipt,
-                            paperWidth: hardwareConfig.paperWidth ?? 80,
-                        });
-                        console.log('[POS] Kitchen label printed for', kitchenItems.length, 'items');
-                    } catch (printError) {
-                        console.warn('[POS] Failed to print kitchen label:', printError);
-                    }
-                }
+                // 2. Print individual tickets for products with printTicket = true
+                // (one ticket per item, no summary receipt)
+                const ticketItems = items.filter(item => item.product.printTicket === true);
+                if (ticketItems.length > 0 && printerName) {
+                    const { invoke } = await import('@tauri-apps/api/core');
 
-                // 3. Print the complete transaction receipt
-                if (printerName) {
-                    try {
-                        const { invoke } = await import('@tauri-apps/api/core');
-                        const receipt = {
-                            header: 'AS MANISSIEUX',
-                            items: items.map(item => ({
-                                name: item.product.name,
-                                quantity: item.quantity,
-                                unit_price: item.product.price,
-                                subtotal: item.product.price * item.quantity,
-                            })),
-                            total: paymentResult.totalAmount,
-                            payment_method: paymentResult.method === 'cash' ? 'Espèces' :
-                                paymentResult.method === 'card' ? 'Carte' : 'Mixte',
-                            footer: 'Merci de votre visite !',
-                            transaction_id: transaction.id,
-                            date: new Date().toLocaleString('fr-FR'),
-                            cash_received: paymentResult.cashReceived > 0 ? paymentResult.cashReceived : undefined,
-                            change_given: paymentResult.changeGiven > 0 ? paymentResult.changeGiven : undefined,
-                        };
-                        await invoke('print_via_driver', {
-                            printerName,
-                            receipt,
-                            paperWidth: hardwareConfig.paperWidth ?? 80,
-                        });
-                        console.log('[POS] Receipt printed successfully');
-                    } catch (printError) {
-                        console.warn('[POS] Failed to print receipt:', printError);
+                    // Print one ticket per item (if quantity > 1, print multiple tickets)
+                    for (const item of ticketItems) {
+                        for (let i = 0; i < item.quantity; i++) {
+                            try {
+                                const singleItemReceipt = {
+                                    header: 'TICKET ASMSP',
+                                    items: [{
+                                        name: item.product.name,
+                                        quantity: 1,
+                                        unit_price: item.product.price,
+                                        subtotal: item.product.price,
+                                    }],
+                                    // No total displayed
+                                    total: 0,
+                                    // No payment method
+                                    payment_method: '',
+                                    footer: 'Merci de jeter ce ticket',
+                                    transaction_id: transaction.id,
+                                    date: new Date().toLocaleString('fr-FR'),
+                                    // Flag for bigger text in Rust
+                                    big_text: true,
+                                    // Hide total line
+                                    hide_total: true,
+                                };
+                                await invoke('print_via_driver', {
+                                    printerName,
+                                    receipt: singleItemReceipt,
+                                    paperWidth: hardwareConfig.paperWidth ?? 80,
+                                });
+                                console.log(`[POS] Ticket printed for ${item.product.name} (${i + 1}/${item.quantity})`);
+                            } catch (printError) {
+                                console.warn('[POS] Failed to print ticket:', printError);
+                            }
+                        }
                     }
                 }
+                // No summary receipt - only individual tickets for printTicket items
             } catch (configError) {
                 console.warn('[POS] Failed to parse hardware config:', configError);
             }

@@ -36,6 +36,10 @@ pub struct ReceiptData {
     pub footer: Option<String>,
     pub transaction_id: i32,
     pub date: String,
+    #[serde(default)]
+    pub big_text: bool,
+    #[serde(default)]
+    pub hide_total: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -396,53 +400,51 @@ pub fn print_via_driver(printer_name: String, receipt: ReceiptData, paper_width:
 
     // Items
     for item in &receipt.items {
-        let item_line = format!(
-            "{} x{} @ {:.2}€",
-            item.name, item.quantity, item.unit_price
-        );
-        data.extend_from_slice(item_line.as_bytes());
+        // Use bigger text for item names if big_text is enabled
+        if receipt.big_text {
+            data.extend_from_slice(&escpos::DOUBLE_SIZE_ON);
+        }
+        
+        // Just the product name in big text
+        data.extend_from_slice(item.name.as_bytes());
         data.push(escpos::LF);
-
-        // Subtotal aligned right
-        data.extend_from_slice(&escpos::ALIGN_RIGHT);
-        let subtotal_line = format!("{:.2}€", item.subtotal);
-        data.extend_from_slice(subtotal_line.as_bytes());
-        data.push(escpos::LF);
-        data.extend_from_slice(&escpos::ALIGN_LEFT);
+        
+        if receipt.big_text {
+            data.extend_from_slice(&escpos::NORMAL_SIZE);
+        }
     }
 
     // Separator
     data.extend_from_slice(separator.as_bytes());
     data.push(escpos::LF);
 
-    // Total (bold, larger)
-    data.extend_from_slice(&escpos::BOLD_ON);
-    data.extend_from_slice(&escpos::DOUBLE_HEIGHT_ON);
-    data.extend_from_slice(&escpos::ALIGN_RIGHT);
-    let total_line = format!("TOTAL: {:.2}€", receipt.total);
-    data.extend_from_slice(total_line.as_bytes());
-    data.push(escpos::LF);
-    data.extend_from_slice(&escpos::NORMAL_SIZE);
-    data.extend_from_slice(&escpos::BOLD_OFF);
-    data.extend_from_slice(&escpos::ALIGN_LEFT);
+    // Only show total if not hidden
+    if !receipt.hide_total && receipt.total > 0.0 {
+        data.extend_from_slice(&escpos::BOLD_ON);
+        data.extend_from_slice(&escpos::DOUBLE_HEIGHT_ON);
+        data.extend_from_slice(&escpos::ALIGN_RIGHT);
+        let total_line = format!("TOTAL: {:.2}E", receipt.total);
+        data.extend_from_slice(total_line.as_bytes());
+        data.push(escpos::LF);
+        data.extend_from_slice(&escpos::NORMAL_SIZE);
+        data.extend_from_slice(&escpos::BOLD_OFF);
+        data.extend_from_slice(&escpos::ALIGN_LEFT);
+    }
 
-    // Payment method
-    let payment_line = format!("Paiement: {}", receipt.payment_method);
-    data.extend_from_slice(payment_line.as_bytes());
-    data.push(escpos::LF);
+    // Only show payment method if not empty
+    if !receipt.payment_method.is_empty() {
+        let payment_line = format!("Paiement: {}", receipt.payment_method);
+        data.extend_from_slice(payment_line.as_bytes());
+        data.push(escpos::LF);
+    }
     data.push(escpos::LF);
 
-    // Footer
+    // Footer (short message)
     if let Some(footer) = &receipt.footer {
         data.extend_from_slice(&escpos::ALIGN_CENTER);
         data.extend_from_slice(footer.as_bytes());
         data.push(escpos::LF);
     }
-
-    // Thank you message
-    data.extend_from_slice(&escpos::ALIGN_CENTER);
-    data.extend_from_slice(b"Merci de votre visite!");
-    data.push(escpos::LF);
     data.push(escpos::LF);
     data.push(escpos::LF);
 
