@@ -4,12 +4,28 @@
 
 // Import Tauri HTTP plugin - required for Windows WebView2 CORS bypass
 // This MUST use the Tauri fetch to work on Windows
-import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
+let tauriFetch: typeof globalThis.fetch | null = null;
 
-// Use Tauri fetch on all platforms for consistency
-// This bypasses WebView2 CORS restrictions on Windows
+// Try to import Tauri HTTP plugin
+try {
+    const httpModule = await import('@tauri-apps/plugin-http');
+    tauriFetch = httpModule.fetch;
+    console.log('[API] Tauri HTTP plugin loaded successfully');
+} catch (e) {
+    console.log('[API] Tauri HTTP plugin not available, using native fetch:', e);
+}
+
+// Use Tauri fetch if available, otherwise fallback to native fetch
 async function safeFetch(url: string, options?: RequestInit): Promise<Response> {
-    return tauriFetch(url, options);
+    if (tauriFetch) {
+        try {
+            return await tauriFetch(url, options);
+        } catch (e) {
+            console.warn('[API] Tauri fetch failed, falling back to native fetch:', e);
+            return globalThis.fetch(url, options);
+        }
+    }
+    return globalThis.fetch(url, options);
 }
 
 export const DEFAULT_API_URL = 'https://api.caissefacile.asmanissieux.fr';
