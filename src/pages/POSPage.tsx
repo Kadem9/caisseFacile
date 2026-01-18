@@ -2,7 +2,7 @@
 // POS Page - Main Cash Register Interface
 // ===================================
 
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, PackageIcon, ChartIcon, SettingsIcon, LogoutIcon, AlertIcon, HamburgerIcon, ShoppingCartIcon, TrashIcon, PlusIcon, MinusIcon, CardIcon } from '../components/ui';
 import { PaymentModal, MenuCompositionModal } from '../components/pos';
@@ -61,6 +61,22 @@ export const POSPage: React.FC = () => {
     const sessionTotal = getSessionTotal();
     const lowStockCount = getLowStockProducts().length;
     const { addToQueue } = useSyncStore();
+
+    // Ref for category scroll navigation
+    const categoriesRef = useRef<HTMLDivElement>(null);
+
+    // Scroll categories left or right
+    const scrollCategories = useCallback((direction: 'left' | 'right') => {
+        if (categoriesRef.current) {
+            const scrollAmount = 200; // pixels to scroll
+            const newScrollLeft = categoriesRef.current.scrollLeft +
+                (direction === 'left' ? -scrollAmount : scrollAmount);
+            categoriesRef.current.scrollTo({
+                left: newScrollLeft,
+                behavior: 'smooth'
+            });
+        }
+    }, []);
 
     // Auto sync is now handled globally in App.tsx
 
@@ -374,18 +390,36 @@ export const POSPage: React.FC = () => {
 
                     {activeTab === 'products' ? (
                         <>
-                            {/* Category Tabs */}
-                            <div className="pos-products__categories">
-                                {categories.map((category) => (
-                                    <button
-                                        key={category.id}
-                                        className={`btn btn--category ${activeCategory === category.id ? 'btn--category--active' : ''}`}
-                                        onClick={() => setActiveCategory(category.id)}
-                                        type="button"
-                                    >
-                                        <span>{category.name}</span>
-                                    </button>
-                                ))}
+                            {/* Category Tabs with Navigation Arrows */}
+                            <div className="pos-products__categories-wrapper">
+                                <button
+                                    className="pos-products__categories-arrow pos-products__categories-arrow--left"
+                                    onClick={() => scrollCategories('left')}
+                                    type="button"
+                                    aria-label="Catégories précédentes"
+                                >
+                                    ‹
+                                </button>
+                                <div className="pos-products__categories" ref={categoriesRef}>
+                                    {categories.map((category) => (
+                                        <button
+                                            key={category.id}
+                                            className={`btn btn--category ${activeCategory === category.id ? 'btn--category--active' : ''}`}
+                                            onClick={() => setActiveCategory(category.id)}
+                                            type="button"
+                                        >
+                                            <span>{category.name}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                                <button
+                                    className="pos-products__categories-arrow pos-products__categories-arrow--right"
+                                    onClick={() => scrollCategories('right')}
+                                    type="button"
+                                    aria-label="Catégories suivantes"
+                                >
+                                    ›
+                                </button>
                             </div>
 
                             {/* Products Grid */}

@@ -150,30 +150,30 @@ export const useProductStore = create<ProductState>()(
             },
 
             deleteProduct: (id) => {
-                const product = get().products.find(p => p.id === id);
-                if (product) {
-                    // For deletion, we might need a soft delete or a specific deletion queue
-                    // For now, let's just mark it as inactive (soft delete best practice for sync)
-                    // or assume specific deletion handling logic in addToQueue if supported.
-                    // IMPORTANT: The backend currently supports 'INSERT OR REPLACE'.
-                    // For true deletion sync, we would need a soft-delete flag or DELETE endpoint.
-                    // The user asked for "modifications", let's behave as if we soft-delete by setting inactive for now
-                    // OR actually delete locally but maybe not sync deletion properly without backend support.
-                    // Given the current backend implementation `INSERT OR REPLACE`, we should set `isActive: false` 
-                    // instead of deleting if we want the server to know.
+                set((state) => {
+                    const product = state.products.find(p => p.id === id);
 
-                    // Let's stick to local deletion for now but if we want sync, we MUST soft delete.
-                    // For this iteration, let's assume we treat 'delete' as 'local delete' but
-                    // 'toggleActive' is the way to 'hide' it.
-                    // Effectively, if we delete properly, we should queue a 'delete' event. 
-                    // But the queue stores 'data' which is the entity.
-                    // Let's Skip queueing actual delete for now to avoid complexity, 
-                    // and rely on `toggleProductActive` for "hiding" products globally.
-                }
+                    if (product) {
+                        // Soft delete: mark as inactive and sync to server
+                        // This ensures the deletion is propagated to all machines
+                        const deletedProduct = {
+                            ...product,
+                            isActive: false,
+                            updatedAt: new Date()
+                        };
 
-                set((state) => ({
-                    products: state.products.filter((p) => p.id !== id),
-                }));
+                        // Queue the "deleted" product for sync (with isActive: false)
+                        useSyncStore.getState().addToQueue('product', deletedProduct);
+                        useSyncStore.getState().syncAll().catch(console.error);
+
+                        console.log('[ProductStore] Product soft-deleted and queued for sync:', product.name);
+                    }
+
+                    // Remove locally  
+                    return {
+                        products: state.products.filter((p) => p.id !== id),
+                    };
+                });
             },
 
             toggleProductActive: (id) => {
@@ -237,9 +237,30 @@ export const useProductStore = create<ProductState>()(
             },
 
             deleteCategory: (id) => {
-                set((state) => ({
-                    categories: state.categories.filter((c) => c.id !== id),
-                }));
+                set((state) => {
+                    const category = state.categories.find(c => c.id === id);
+
+                    if (category) {
+                        // Soft delete: mark as inactive and sync to server
+                        // This ensures the deletion is propagated to all machines
+                        const deletedCategory = {
+                            ...category,
+                            isActive: false,
+                            updatedAt: new Date()
+                        };
+
+                        // Queue the "deleted" category for sync (with isActive: false)
+                        useSyncStore.getState().addToQueue('category', deletedCategory);
+                        useSyncStore.getState().syncAll().catch(console.error);
+
+                        console.log('[ProductStore] Category soft-deleted and queued for sync:', category.name);
+                    }
+
+                    // Remove locally  
+                    return {
+                        categories: state.categories.filter((c) => c.id !== id),
+                    };
+                });
             },
 
             // Stock Actions

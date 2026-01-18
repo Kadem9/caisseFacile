@@ -24,8 +24,32 @@ export const MenuCompositionModal: React.FC<MenuCompositionModalProps> = ({
     const [activeStep, setActiveStep] = useState(0);
     const [selections, setSelections] = useState<Map<number, Product>>(new Map());
 
-    const currentComponent = menu.components[activeStep];
-    const totalSteps = menu.components.length;
+    const currentComponent = menu.components?.[activeStep];
+    const totalSteps = menu.components?.length || 0;
+
+    // Early return if no components
+    if (!currentComponent || totalSteps === 0) {
+        return (
+            <div className="modal-overlay" onClick={onClose}>
+                <div className="menu-composition-modal" onClick={(e) => e.stopPropagation()}>
+                    <div className="modal-header">
+                        <h2>{menu.name}</h2>
+                        <button className="btn-icon" onClick={onClose}>
+                            <XIcon size={24} />
+                        </button>
+                    </div>
+                    <div className="menu-components-list" style={{ padding: '2rem', textAlign: 'center' }}>
+                        <p>Ce menu n'a pas de composants configurés.</p>
+                    </div>
+                    <div className="modal-actions">
+                        <button className="btn btn--secondary btn--xl" onClick={onClose} type="button">
+                            Fermer
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     const handleProductSelect = (componentId: number, product: Product) => {
         const newSelections = new Map(selections);
@@ -57,8 +81,8 @@ export const MenuCompositionModal: React.FC<MenuCompositionModalProps> = ({
     };
 
     const isStepComplete = (stepIdx: number) => {
-        const component = menu.components[stepIdx];
-        if (!component.isRequired) return true;
+        const component = menu.components?.[stepIdx];
+        if (!component || !component.isRequired) return true;
         return selections.has(component.id);
     };
 

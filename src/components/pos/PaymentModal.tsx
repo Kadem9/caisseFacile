@@ -2,9 +2,9 @@
 // Payment Modal Component
 // ===================================
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Button, CashIcon, CardIcon, ArrowLeftIcon, XIcon, CheckIcon, DrawerIcon, PrinterIcon, RefreshIcon, AlertIcon } from '../ui';
+import { Button, CashIcon, CardIcon, ArrowLeftIcon, XIcon, CheckIcon, DrawerIcon, RefreshIcon, AlertIcon } from '../ui';
 import { TicketsModal } from './TicketsModal';
 import type { PaymentMethod, CartItem } from '../../types';
 import './PaymentModal.css';
@@ -75,6 +75,19 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     // TPE State
     const [tpeStatus, setTpeStatus] = useState<TpeStatus>('idle');
     const [tpeMessage, setTpeMessage] = useState<string>('');
+
+    // Reset state when modal closes
+    useEffect(() => {
+        if (!isOpen) {
+            setStep('method');
+            setMethod('cash');
+            setCashInput('');
+            setCardAmount(0);
+            setShowTickets(false);
+            setTpeStatus('idle');
+            setTpeMessage('');
+        }
+    }, [isOpen]);
 
 
     // Calculate cash received from input
@@ -172,11 +185,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                         changeGiven: 0,
                     };
                     setStep('complete');
+                    // Call onConfirm after showing complete step briefly
                     setTimeout(() => {
                         onConfirm(paymentResult);
-                        setStep('method');
-                        setTpeStatus('idle');
-                        setTpeMessage('');
+                        // Don't reset here - useEffect will handle it when modal closes
                     }, 1500);
                 }, 500);
 
@@ -258,10 +270,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
         // Show success briefly, then confirm
         setTimeout(() => {
             onConfirm(result);
-            // Reset state
-            setStep('method');
-            setCashInput('');
-            setCardAmount(0);
+            // Don't reset state here - useEffect will handle it when modal closes
         }, 1500);
     }, [method, totalAmount, cashReceived, cardAmount, changeGiven, onConfirm]);
 
@@ -648,13 +657,6 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                             )}
 
                             <div style={{ marginTop: '2rem', display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-                                <Button
-                                    variant="secondary"
-                                    onClick={() => setShowTickets(true)}
-                                    style={{ border: '1px dashed #f59e0b', color: '#d97706', background: '#fffbeb' }}
-                                >
-                                    <PrinterIcon size={20} /> Voir les tickets (DEV)
-                                </Button>
                                 <Button variant="primary" onClick={onCancel}>
                                     Nouvelle vente
                                 </Button>
