@@ -212,7 +212,7 @@ export const POSPage: React.FC = () => {
                     try {
                         const { invoke } = await import('@tauri-apps/api/core');
                         const receipt = {
-                            header: 'AS MAN ISSIEUX',
+                            header: 'AS MANISSIEUX',
                             items: items.map(item => ({
                                 name: item.product.name,
                                 quantity: item.quantity,
