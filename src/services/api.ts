@@ -2,21 +2,35 @@
 // API Service - HTTP Client Configuration
 // ===================================
 
-// Import Tauri HTTP plugin - required for Windows WebView2 CORS bypass
-// This MUST use the Tauri fetch to work on Windows
+// Lazy-loaded Tauri HTTP plugin fetch
+// NOT using top-level await to avoid Windows module loading issues
 let tauriFetch: typeof globalThis.fetch | null = null;
+let tauriFetchInitialized = false;
 
-// Try to import Tauri HTTP plugin
-try {
-    const httpModule = await import('@tauri-apps/plugin-http');
-    tauriFetch = httpModule.fetch;
-    console.log('[API] Tauri HTTP plugin loaded successfully');
-} catch (e) {
-    console.log('[API] Tauri HTTP plugin not available, using native fetch:', e);
+// Lazy initialize Tauri fetch on first use
+async function initTauriFetch(): Promise<void> {
+    if (tauriFetchInitialized) return;
+    tauriFetchInitialized = true;
+
+    try {
+        // Check if we're in Tauri environment
+        if (typeof window !== 'undefined' && '__TAURI__' in window) {
+            const httpModule = await import('@tauri-apps/plugin-http');
+            tauriFetch = httpModule.fetch;
+            console.log('[API] Tauri HTTP plugin loaded successfully');
+        } else {
+            console.log('[API] Not in Tauri environment, using native fetch');
+        }
+    } catch (e) {
+        console.log('[API] Tauri HTTP plugin not available, using native fetch:', e);
+    }
 }
 
 // Use Tauri fetch if available, otherwise fallback to native fetch
 async function safeFetch(url: string, options?: RequestInit): Promise<Response> {
+    // Lazy init on first call
+    await initTauriFetch();
+
     if (tauriFetch) {
         try {
             return await tauriFetch(url, options);
