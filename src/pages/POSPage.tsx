@@ -206,6 +206,38 @@ export const POSPage: React.FC = () => {
                         console.warn('[POS] Failed to print kitchen label:', printError);
                     }
                 }
+
+                // 3. Print the complete transaction receipt
+                if (printerName) {
+                    try {
+                        const { invoke } = await import('@tauri-apps/api/core');
+                        const receipt = {
+                            header: 'AS MAN ISSIEUX',
+                            items: items.map(item => ({
+                                name: item.product.name,
+                                quantity: item.quantity,
+                                unit_price: item.product.price,
+                                subtotal: item.product.price * item.quantity,
+                            })),
+                            total: paymentResult.totalAmount,
+                            payment_method: paymentResult.method === 'cash' ? 'Espèces' :
+                                paymentResult.method === 'card' ? 'Carte' : 'Mixte',
+                            footer: 'Merci de votre visite !',
+                            transaction_id: transaction.id,
+                            date: new Date().toLocaleString('fr-FR'),
+                            cash_received: paymentResult.cashReceived > 0 ? paymentResult.cashReceived : undefined,
+                            change_given: paymentResult.changeGiven > 0 ? paymentResult.changeGiven : undefined,
+                        };
+                        await invoke('print_via_driver', {
+                            printerName,
+                            receipt,
+                            paperWidth: hardwareConfig.paperWidth ?? 80,
+                        });
+                        console.log('[POS] Receipt printed successfully');
+                    } catch (printError) {
+                        console.warn('[POS] Failed to print receipt:', printError);
+                    }
+                }
             } catch (configError) {
                 console.warn('[POS] Failed to parse hardware config:', configError);
             }
