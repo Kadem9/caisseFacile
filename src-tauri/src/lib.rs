@@ -2,6 +2,7 @@
 
 mod hardware;
 mod tpe;
+mod http_proxy;
 
 use hardware::{
     list_serial_ports,
@@ -20,6 +21,8 @@ use tpe::{
     send_tpe_payment,
     cancel_tpe_transaction,
 };
+
+use http_proxy::http_request;
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -64,6 +67,8 @@ pub fn run() {
             send_tpe_payment,
             cancel_tpe_transaction,
             quit_app,
+            // HTTP Proxy for Windows compatibility
+            http_request,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

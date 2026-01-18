@@ -2,44 +2,65 @@
 // API Service - HTTP Client Configuration
 // ===================================
 
-// Lazy-loaded Tauri HTTP plugin fetch
-// NOT using top-level await to avoid Windows module loading issues
-let tauriFetch: typeof globalThis.fetch | null = null;
-let tauriFetchInitialized = false;
+import { invoke } from '@tauri-apps/api/core';
 
-// Lazy initialize Tauri fetch on first use
-async function initTauriFetch(): Promise<void> {
-    if (tauriFetchInitialized) return;
-    tauriFetchInitialized = true;
-
-    try {
-        // Check if we're in Tauri environment
-        if (typeof window !== 'undefined' && '__TAURI__' in window) {
-            const httpModule = await import('@tauri-apps/plugin-http');
-            tauriFetch = httpModule.fetch;
-            console.log('[API] Tauri HTTP plugin loaded successfully');
-        } else {
-            console.log('[API] Not in Tauri environment, using native fetch');
-        }
-    } catch (e) {
-        console.log('[API] Tauri HTTP plugin not available, using native fetch:', e);
-    }
+// Response type from Rust http_request command
+interface RustHttpResponse {
+    status: number;
+    ok: boolean;
+    body: string;
+    headers: Record<string, string>;
 }
 
-// Use Tauri fetch if available, otherwise fallback to native fetch
-async function safeFetch(url: string, options?: RequestInit): Promise<Response> {
-    // Lazy init on first call
-    await initTauriFetch();
+// Check if we're in Tauri environment
+function isTauri(): boolean {
+    return typeof window !== 'undefined' && '__TAURI__' in window;
+}
 
-    if (tauriFetch) {
-        try {
-            return await tauriFetch(url, options);
-        } catch (e) {
-            console.warn('[API] Tauri fetch failed, falling back to native fetch:', e);
-            return globalThis.fetch(url, options);
-        }
+// Use Rust HTTP proxy in Tauri, native fetch in browser
+async function safeFetch(url: string, options?: RequestInit): Promise<Response> {
+    // In browser/dev mode without Tauri, use native fetch
+    if (!isTauri()) {
+        return globalThis.fetch(url, options);
     }
-    return globalThis.fetch(url, options);
+
+    // In Tauri app, use Rust HTTP proxy to bypass Windows WebView2 limitations
+    try {
+        const headers: Record<string, string> = {};
+        if (options?.headers) {
+            if (options.headers instanceof Headers) {
+                options.headers.forEach((value, key) => {
+                    headers[key] = value;
+                });
+            } else if (Array.isArray(options.headers)) {
+                options.headers.forEach(([key, value]) => {
+                    headers[key] = value;
+                });
+            } else {
+                Object.assign(headers, options.headers);
+            }
+        }
+
+        const response = await invoke<RustHttpResponse>('http_request', {
+            request: {
+                url,
+                method: options?.method || 'GET',
+                body: options?.body ? String(options.body) : null,
+                headers,
+            }
+        });
+
+        // Convert Rust response to standard Response object
+        return new Response(response.body, {
+            status: response.status,
+            statusText: response.ok ? 'OK' : 'Error',
+            headers: new Headers(response.headers),
+        });
+    } catch (error) {
+        console.error('[API] Rust HTTP proxy failed:', error);
+        // Fallback to native fetch if Rust proxy fails
+        return globalThis.fetch(url, options);
+    }
 }
 
 export const DEFAULT_API_URL = 'https://api.caissefacile.asmanissieux.fr';
