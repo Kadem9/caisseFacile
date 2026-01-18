@@ -1,67 +1,7 @@
 // ===================================
 // API Service - HTTP Client Configuration
 // ===================================
-
-import { invoke } from '@tauri-apps/api/core';
-
-// Response type from Rust http_request command
-interface RustHttpResponse {
-    status: number;
-    ok: boolean;
-    body: string;
-    headers: Record<string, string>;
-}
-
-// Check if we're in Tauri environment
-function isTauri(): boolean {
-    return typeof window !== 'undefined' && '__TAURI__' in window;
-}
-
-// Use Rust HTTP proxy in Tauri, native fetch in browser
-async function safeFetch(url: string, options?: RequestInit): Promise<Response> {
-    // In browser/dev mode without Tauri, use native fetch
-    if (!isTauri()) {
-        return globalThis.fetch(url, options);
-    }
-
-    // In Tauri app, use Rust HTTP proxy to bypass Windows WebView2 limitations
-    try {
-        const headers: Record<string, string> = {};
-        if (options?.headers) {
-            if (options.headers instanceof Headers) {
-                options.headers.forEach((value, key) => {
-                    headers[key] = value;
-                });
-            } else if (Array.isArray(options.headers)) {
-                options.headers.forEach(([key, value]) => {
-                    headers[key] = value;
-                });
-            } else {
-                Object.assign(headers, options.headers);
-            }
-        }
-
-        const response = await invoke<RustHttpResponse>('http_request', {
-            request: {
-                url,
-                method: options?.method || 'GET',
-                body: options?.body ? String(options.body) : null,
-                headers,
-            }
-        });
-
-        // Convert Rust response to standard Response object
-        return new Response(response.body, {
-            status: response.status,
-            statusText: response.ok ? 'OK' : 'Error',
-            headers: new Headers(response.headers),
-        });
-    } catch (error) {
-        console.error('[API] Rust HTTP proxy failed:', error);
-        // Fallback to native fetch if Rust proxy fails
-        return globalThis.fetch(url, options);
-    }
-}
+import { fetch } from '@tauri-apps/plugin-http';
 
 export const DEFAULT_API_URL = 'https://api.caissefacile.asmanissieux.fr';
 
@@ -116,7 +56,7 @@ async function apiRequest<T>(
             ...options.headers,
         };
 
-        const response = await safeFetch(url, {
+        const response = await fetch(url, {
             ...options,
             headers: headers,
         });
