@@ -100,9 +100,28 @@ export const useMenuStore = create<MenuState>()(
             },
 
             deleteMenu: (id) => {
-                set((state) => ({
-                    menus: state.menus.filter((menu) => menu.id !== id),
-                }));
+                set((state) => {
+                    const menu = state.menus.find(m => m.id === id);
+
+                    if (menu) {
+                        // Soft delete: mark as inactive and sync to server
+                        const deletedMenu = {
+                            ...menu,
+                            isActive: false,
+                            updatedAt: new Date()
+                        };
+
+                        useSyncStore.getState().addToQueue('menu', deletedMenu);
+                        useSyncStore.getState().syncAll().catch(console.error);
+
+                        console.log('[MenuStore] Menu soft-deleted and queued for sync:', menu.name);
+                    }
+
+                    // Remove locally  
+                    return {
+                        menus: state.menus.filter((m) => m.id !== id),
+                    };
+                });
             },
 
             toggleMenuActive: (id) => {
@@ -133,19 +152,30 @@ export const useMenuStore = create<MenuState>()(
 
             mergeServerMenus: (newMenus) => {
                 set((state) => {
-                    const currentMenus = [...state.menus];
+                    let currentMenus = [...state.menus];
                     let hasChanges = false;
 
                     newMenus.forEach(serverMenu => {
                         const sm = serverMenu as any;
-                        const index = currentMenus.findIndex(m => m.id === sm.localId || m.id === sm.id);
+                        const menuId = sm.localId || sm.id;
+                        const index = currentMenus.findIndex(m => m.id === menuId);
+
+                        // If server says menu is deleted (isActive: false), remove it locally
+                        if (!serverMenu.isActive) {
+                            if (index >= 0) {
+                                console.log('[Sync Merge] Deleting menu (isActive=false):', sm.name);
+                                currentMenus = currentMenus.filter(m => m.id !== menuId);
+                                hasChanges = true;
+                            }
+                            return; // Don't add deleted menus
+                        }
 
                         const mappedMenu = {
                             ...serverMenu,
-                            id: (serverMenu as any).localId || serverMenu.id,
+                            id: menuId,
                             createdAt: new Date(serverMenu.createdAt),
                             updatedAt: new Date(serverMenu.updatedAt || new Date()),
-                            isActive: Boolean(serverMenu.isActive)
+                            isActive: true // Only active menus reach here
                         };
 
                         if (index >= 0) {

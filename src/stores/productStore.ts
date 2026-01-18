@@ -326,33 +326,38 @@ export const useProductStore = create<ProductState>()(
             // Silent update for sync (Pull)
             mergeServerProducts: (newProducts) => {
                 set((state) => {
-                    const currentProducts = [...state.products];
+                    let currentProducts = [...state.products];
                     let hasChanges = false;
 
                     newProducts.forEach(serverProd => {
-                        // CASTing to any to bypass strict type checks for debug
                         const sp = serverProd as any;
-                        console.log('[Sync Merge] Processing:', sp.name, 'ServerID:', sp.id, 'LocalID:', sp.localId, 'Image:', sp.imagePath);
+                        const productId = sp.localId || sp.id;
+                        const index = currentProducts.findIndex(p => p.id === productId);
 
-                        const index = currentProducts.findIndex(p => p.id === sp.localId || p.id === sp.id);
-                        console.log('[Sync Merge] Found local match at index:', index, 'for ID:', sp.localId || sp.id);
+                        // If server says product is deleted (isActive: false), remove it locally
+                        if (!serverProd.isActive) {
+                            if (index >= 0) {
+                                console.log('[Sync Merge] Deleting product (isActive=false):', sp.name);
+                                currentProducts = currentProducts.filter(p => p.id !== productId);
+                                hasChanges = true;
+                            }
+                            return; // Don't add deleted products
+                        }
 
-                        // Map server fields if necessary (dates are strings from JSON)
+                        // Map server fields
                         const mappedProd = {
                             ...serverProd,
-                            id: (serverProd as any).localId || serverProd.id, // Ensure we map localId back to id
-                            categoryId: (serverProd as any).categoryId || serverProd.categoryId,
+                            id: productId,
+                            categoryId: sp.categoryId || serverProd.categoryId,
                             createdAt: new Date(serverProd.createdAt),
                             updatedAt: new Date(serverProd.updatedAt || new Date()),
-                            isActive: Boolean(serverProd.isActive)
+                            isActive: true // Only active products reach here
                         };
 
                         if (index >= 0) {
-                            // Update existing
                             currentProducts[index] = { ...currentProducts[index], ...mappedProd };
                             hasChanges = true;
                         } else {
-                            // Insert new (careful with ID collisions, but trust server for now)
                             currentProducts.push(mappedProd as Product);
                             hasChanges = true;
                         }
@@ -369,14 +374,23 @@ export const useProductStore = create<ProductState>()(
                 set((state) => {
                     // Server categories are the source of truth
                     // We REPLACE local categories with server categories
-                    if (serverCategories.length === 0) {
+                    // Filter out deleted categories (isActive: false)
+                    const activeCategories = serverCategories.filter(cat => cat.isActive !== false);
+
+                    if (activeCategories.length === 0 && serverCategories.length > 0) {
+                        // All categories were deleted - clear local
+                        console.log('[ProductStore] All categories deleted on server');
+                        return { categories: [], lastCategoryId: state.lastCategoryId };
+                    }
+
+                    if (activeCategories.length === 0) {
                         return {};
                     }
 
                     let maxId = state.lastCategoryId;
 
                     // Map and track max ID
-                    const mergedCategories: Category[] = serverCategories.map((serverCat) => {
+                    const mergedCategories: Category[] = activeCategories.map((serverCat) => {
                         if (serverCat.id > maxId) maxId = serverCat.id;
 
                         return {
@@ -385,7 +399,7 @@ export const useProductStore = create<ProductState>()(
                             color: serverCat.color || '#6b7280',
                             icon: serverCat.icon || '📦',
                             sortOrder: serverCat.sortOrder ?? 0,
-                            isActive: serverCat.isActive ?? true,
+                            isActive: true, // Only active categories reach here
                             createdAt: serverCat.createdAt || new Date(),
                             updatedAt: serverCat.updatedAt || new Date(),
                         };
@@ -394,7 +408,7 @@ export const useProductStore = create<ProductState>()(
                     // Sort by sortOrder to ensure consistent ordering across all machines
                     mergedCategories.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
 
-                    console.log('[ProductStore] Categories synced from server:', mergedCategories.length, 'categories');
+                    console.log('[ProductStore] Categories synced from server:', mergedCategories.length, 'active categories');
 
                     return {
                         categories: mergedCategories,
