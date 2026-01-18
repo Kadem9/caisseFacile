@@ -198,7 +198,7 @@ export const POSPage: React.FC = () => {
                                     total: 0,
                                     // No payment method
                                     payment_method: '',
-                                    footer: 'Merci de jeter ce ticket',
+                                    footer: 'Merci de jeter ce ticket       ',
                                     transaction_id: transaction.id,
                                     date: new Date().toLocaleString('fr-FR'),
                                     // Flag for bigger text in Rust

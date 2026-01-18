@@ -346,39 +346,39 @@ export const useProductStore = create<ProductState>()(
 
             mergeServerCategories: (serverCategories: Category[]) => {
                 set((state) => {
-                    const currentCategories = [...state.categories];
-                    let hasChanges = false;
+                    // Server categories are the source of truth
+                    // We REPLACE local categories with server categories
+                    if (serverCategories.length === 0) {
+                        return {};
+                    }
+
                     let maxId = state.lastCategoryId;
 
-                    serverCategories.forEach((serverCat) => {
-                        const index = currentCategories.findIndex(
-                            (c) => c.id === serverCat.id || (serverCat.id && c.id === serverCat.id)
-                        );
-
-                        const mappedCat: Partial<Category> = {
-                            id: serverCat.id,
-                            name: serverCat.name,
-                            color: serverCat.color,
-                            icon: serverCat.icon,
-                            sortOrder: serverCat.sortOrder,
-                            isActive: serverCat.isActive,
-                        };
-
+                    // Map and track max ID
+                    const mergedCategories: Category[] = serverCategories.map((serverCat) => {
                         if (serverCat.id > maxId) maxId = serverCat.id;
 
-                        if (index >= 0) {
-                            currentCategories[index] = { ...currentCategories[index], ...mappedCat };
-                            hasChanges = true;
-                        } else {
-                            currentCategories.push(mappedCat as Category);
-                            hasChanges = true;
-                        }
+                        return {
+                            id: serverCat.id,
+                            name: serverCat.name,
+                            color: serverCat.color || '#6b7280',
+                            icon: serverCat.icon || '📦',
+                            sortOrder: serverCat.sortOrder ?? 0,
+                            isActive: serverCat.isActive ?? true,
+                            createdAt: serverCat.createdAt || new Date(),
+                            updatedAt: serverCat.updatedAt || new Date(),
+                        };
                     });
 
-                    if (hasChanges) {
-                        return { categories: currentCategories, lastCategoryId: maxId };
-                    }
-                    return {};
+                    // Sort by sortOrder to ensure consistent ordering across all machines
+                    mergedCategories.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+
+                    console.log('[ProductStore] Categories synced from server:', mergedCategories.length, 'categories');
+
+                    return {
+                        categories: mergedCategories,
+                        lastCategoryId: maxId
+                    };
                 });
             },
         }),
