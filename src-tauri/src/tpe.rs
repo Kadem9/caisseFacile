@@ -760,10 +760,77 @@ fn parse_response(data: &[u8], amount_cents: u32, raw: &str) -> Result<TpePaymen
     if let (Some(s), Some(e)) = (stx, etx) {
         if e > s {
             let body = &data[s+1..e];
+            let body_str = String::from_utf8_lossy(body);
             
-            // Success detection: '0' in body (Concert: ResponseCode '0')
-            if body.contains(&b'0') { 
-                  return Ok(TpePaymentResponse {
+            println!("Parsing Concert V3 response body: {}", body_str);
+            log_to_file(&format!("Concert body: {}", body_str));
+            
+            // Concert V3 Serial response format:
+            // Byte 1-2: POS number (e.g., "01")
+            // Byte 3-4: Function code ("80" = payment response)
+            // Byte 5-6: Status code ("00" = success, "10" = refused, etc.)
+            // Byte 7-16: Amount (10 digits)
+            // Byte 17-19: Currency code (e.g., "978" = EUR)
+            // Following: Authorization code, etc.
+            
+            if body.len() >= 6 {
+                let status_code = &body_str[4..6];
+                println!("Concert status code: {}", status_code);
+                log_to_file(&format!("Concert status code: {}", status_code));
+                
+                // Status code interpretation (Concert V3):
+                // 00 = Transaction approved
+                // 05 = Do not honor
+                // 10 = Terminal/user cancelled
+                // 51 = Insufficient funds
+                // 54 = Expired card
+                // 55 = Wrong PIN
+                // 57 = Transaction not allowed
+                // 91 = Issuer not available
+                
+                if status_code == "00" {
+                    // Extract authorization number if present (usually after amount+currency)
+                    let auth_num = if body.len() > 19 {
+                        Some(body_str[19..].trim().to_string())
+                    } else {
+                        None
+                    };
+                    
+                    return Ok(TpePaymentResponse {
+                        success: true,
+                        transaction_result: "APPROVED".to_string(),
+                        amount_cents,
+                        authorization_number: auth_num,
+                        error_message: None,
+                        raw_response: Some(raw.to_string()),
+                    });
+                } else {
+                    // Map status codes to user-friendly messages
+                    let error_msg = match status_code {
+                        "05" => "Paiement refusé par la banque",
+                        "10" => "Transaction annulée",
+                        "51" => "Fonds insuffisants",
+                        "54" => "Carte expirée",
+                        "55" => "Code PIN incorrect",
+                        "57" => "Transaction non autorisée",
+                        "91" => "Émetteur de carte indisponible",
+                        _ => "Paiement refusé",
+                    };
+                    
+                    return Ok(TpePaymentResponse {
+                        success: false,
+                        transaction_result: status_code.to_string(),
+                        amount_cents,
+                        authorization_number: None,
+                        error_message: Some(format!("{} (Code: {})", error_msg, status_code)),
+                        raw_response: Some(raw.to_string()),
+                    });
+                }
+            }
+            
+            // Fallback for shorter messages: check for any '0' as generic success indicator
+            if body.contains(&b'0') && body.len() < 6 { 
+                return Ok(TpePaymentResponse {
                     success: true,
                     transaction_result: "0".to_string(),
                     amount_cents,
@@ -771,17 +838,17 @@ fn parse_response(data: &[u8], amount_cents: u32, raw: &str) -> Result<TpePaymen
                     error_message: None,
                     raw_response: Some(raw.to_string()),
                 });
-             }
+            }
         }
     }
     
-    // Simple ACK or just raw data without framing is ambiguous
+    // No framing found - try raw interpretation
     Ok(TpePaymentResponse {
         success: false,
         transaction_result: "?".to_string(),
         amount_cents,
         authorization_number: None,
-        error_message: Some(format!("No success code found in: {}", raw)),
+        error_message: Some("Réponse non reconnue du TPE".to_string()),
         raw_response: Some(raw.to_string()),
     })
 }
