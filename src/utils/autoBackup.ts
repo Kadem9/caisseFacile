@@ -3,6 +3,7 @@ import { jsPDF } from "jspdf";
 import "jspdf-autotable";
 import { writeFile, BaseDirectory, exists, mkdir } from '@tauri-apps/plugin-fs';
 import { Transaction } from '../types';
+import { logger } from '../services/logger';
 
 // Augment jsPDF type for autotable
 interface jsPDFWithAutoTable extends jsPDF {
@@ -95,10 +96,12 @@ export async function generateAndSaveDailyReport(transactions: Transaction[]): P
         const filePath = `${dirName}/${fileName}`;
         await writeFile(filePath, new Uint8Array(pdfOutput), { baseDir: BaseDirectory.Document });
 
+        await logger.info(`Backup saved successfully: ${filePath}`);
         return filePath;
 
     } catch (error) {
         console.error("Auto backup failed:", error);
+        await logger.error("Auto backup failed", error);
         throw error;
     }
 }

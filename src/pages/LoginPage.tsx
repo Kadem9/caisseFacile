@@ -11,6 +11,7 @@ import { UserCard } from '../components/auth';
 import { NumPad, PinDisplay, PowerIcon, XIcon } from '../components/ui';
 import { useAuthStore, useTransactionStore, useSyncStore } from '../stores';
 import { generateAndSaveDailyReport } from '../utils/autoBackup';
+import { logger } from '../services/logger';
 import type { User } from '../types';
 import './LoginPage.css';
 import logoImg from '../assets/logo-asmsp.png';
@@ -95,6 +96,7 @@ export const LoginPage: React.FC = () => {
             return true;
         } catch (error) {
             console.error("Backup failed", error);
+            await logger.error("Backup failed during close/shutdown", error);
             setBackupStatus("Erreur sauvegarde.");
             // We proceed even if backup fails, but maybe log it?
             return false;
