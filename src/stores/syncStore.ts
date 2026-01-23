@@ -18,6 +18,7 @@ import {
     getSyncDiff,
     type SyncResult,
 } from '../services/api';
+import { logger } from '../services/logger';
 import { useImageCacheStore } from './imageCacheStore';
 import type { Transaction, CashClosure, Product, StockMovement, Menu, Category, User } from '../types';
 
@@ -272,9 +273,13 @@ export const useSyncStore = create<SyncState>()(
                     }
 
                     set({ lastSyncAt: new Date(ts) });
+                    if (products?.length > 0 || menus?.length > 0) {
+                        logger.info('Pull updates successful', { products: products?.length, menus: menus?.length }).catch(console.error);
+                    }
                     return true;
                 } catch (e) {
                     console.error("Pull updates failed", e);
+                    logger.error("Pull updates failed", e).catch(console.error);
                     return false;
                 }
             },
@@ -374,9 +379,11 @@ export const useSyncStore = create<SyncState>()(
                             queue: get().queue.filter(i => !itemIds.includes(i.id)),
                             syncLog: [logEntry, ...syncLog].slice(0, 50), // Keep last 50 entries
                         });
+                        logger.info(`Synced ${items.length} ${type}(s) successfully`).catch(console.error);
                         return true;
                     } else {
                         // Increment retry count for failed items
+                        logger.warn(`Failed to sync ${type}`, { error: result?.error }).catch(console.error);
                         logEntry.status = 'error';
                         logEntry.message = result?.error || 'Unknown error';
 

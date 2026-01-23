@@ -4,6 +4,7 @@ import { PackageIcon, TrashIcon, SearchIcon, PlusIcon, AlertIcon, XIcon, CheckIc
 import { getProductImageUrl } from '../helpers/urlHelper';
 import type { Product, ProductCreateInput } from '../types';
 import { ask } from '@tauri-apps/plugin-dialog';
+import { logger } from '../services/logger';
 import './ProductsPage.css';
 
 export const ProductsPage: React.FC = () => {
@@ -109,8 +110,10 @@ export const ProductsPage: React.FC = () => {
             if (selectedImageFile) {
                 try {
                     finalImagePath = await uploadProductImage(selectedImageFile);
+                    await logger.info('Product image uploaded successfully', { name: selectedImageFile.name, path: finalImagePath });
                 } catch (error) {
                     console.error("Upload failed:", error);
+                    await logger.error("Product image upload failed", error, { name: selectedImageFile.name });
                     finalImagePath = editingProduct?.imagePath || '';
                 }
             } else if (finalImagePath?.startsWith('blob:')) {
@@ -121,13 +124,16 @@ export const ProductsPage: React.FC = () => {
 
             if (editingProduct) {
                 updateProduct(editingProduct.id, productData);
+                await logger.info('Product updated', { id: editingProduct.id, name: productData.name });
             } else {
                 addProduct(productData);
+                await logger.info('Product created', { name: productData.name });
             }
 
             handleClosePanel();
         } catch (error) {
             console.error("Save error:", error);
+            await logger.error("Product save failed", error);
             alert("Erreur lors de l'enregistrement");
         } finally {
             setIsSaving(false);
@@ -144,6 +150,7 @@ export const ProductsPage: React.FC = () => {
 
         if (confirmed) {
             deleteProduct(id);
+            await logger.info('Product deleted', { id });
             if (editingProduct?.id === id) {
                 handleClosePanel();
             }
