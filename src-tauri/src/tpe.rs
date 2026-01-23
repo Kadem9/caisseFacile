@@ -275,12 +275,13 @@ fn build_caisse_ap_ip_message(amount_cents: u32, pos_id: &str) -> Vec<u8> {
     
     let mut msg = String::new();
     
-    // CZ = Protocol version (must be first!) - "0300" for version 3.0
-    msg.push_str(&tlv("CZ", "0300"));
+    // CZ = Protocol version (must be first!) - "0320" for version 3.2 (was 0300)
+    msg.push_str(&tlv("CZ", "0320"));
     
     // CJ = Concert Protocol Identifier (Standard)
-    // Reverted to default. Refusal seems to be TPE configuration or bank side.
-    msg.push_str(&tlv("CJ", "012345678901"));
+    // REMOVED: Sending a specific CJ might cause timeouts if it doesn't match the TPE's expected ID.
+    // Let the TPE use its default.
+    // msg.push_str(&tlv("CJ", "012345678901"));
     
     // CA = POS number (caisse number)
     // Reverted to standard "01" after testing "1".
@@ -455,8 +456,8 @@ pub async fn send_tpe_payment(
             if total_read > 0 {
                 // IMPORTANT: Some terminals expect an ACK after sending their response
                 // otherwise they might consider the transaction as failed/refused.
-                println!("Sending ACK to confirm receipt...");
-                let _ = stream.write_all(&[0x06]);
+                println!("Sending ACK (+EOT) to confirm receipt...");
+                let _ = stream.write_all(&[0x06, 0x04]); // ACK + EOT
                 let _ = stream.flush();
                 std::thread::sleep(Duration::from_millis(100)); // Reduced from 500ms
                 
