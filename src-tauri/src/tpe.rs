@@ -378,6 +378,49 @@ pub async fn send_tpe_payment(
             
             // Always use standard Caisse-AP (Concert V3)
             println!("--- CAISSE-AP (CONCERT) MODE ---");
+            
+            // STEP 1: Handshake (ENQ)
+            // Some terminals require ENQ even on TCP to Initialize the transaction state
+            println!("Sending ENQ to initialize...");
+            log_to_file("Sending ENQ...");
+            stream.write_all(&[ENQ]).map_err(|e| format!("Send ENQ failed: {}", e))?;
+            stream.flush().ok();
+            
+            // Wait for ACK
+            let mut buf = [0u8; 64];
+            match stream.peek(&mut buf) {
+                Ok(_) => {
+                    // Just peek to see if data comes, we'll read it properly
+                }
+                Err(_) => {}
+            }
+            
+            // Short read to get ACK
+            // We use a short timeout because if it's NEPTING pure IP, it might not ACK.
+            // If it's pure CONCERT, it MUST ACK.
+            let mut handshake_buf = [0u8; 10];
+            stream.set_read_timeout(Some(Duration::from_millis(1000))).ok();
+            
+            match stream.read(&mut handshake_buf) {
+                Ok(n) if n > 0 => {
+                     let hex = bytes_to_hex(&handshake_buf[..n]);
+                     println!("Handshake response: {}", hex);
+                     log_to_file(&format!("Handshake response: {}", hex));
+                     if handshake_buf[0] == ACK {
+                         println!("ACK received! Proceeding...");
+                     } else {
+                         println!("Received non-ACK ({}). Proceeding anyway...", hex);
+                     }
+                }
+                Ok(_) | Err(_) => {
+                    println!("No handshake ACK received (timeout). Sending message anyway...");
+                    log_to_file("No handshake ACK. Proceeding...");
+                }
+            }
+            
+            // Restore timeout
+            stream.set_read_timeout(Some(Duration::from_secs(150))).ok();
+
             let message_bytes = build_caisse_ap_ip_message(amount_cents, &pos_number_clone);
             
             println!("Sending Payment Request ({} bytes)", message_bytes.len());
