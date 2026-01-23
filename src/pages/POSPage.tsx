@@ -2,7 +2,7 @@
 // POS Page - Main Cash Register Interface
 // ===================================
 
-import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, PackageIcon, ChartIcon, SettingsIcon, LogoutIcon, AlertIcon, HamburgerIcon, ShoppingCartIcon, TrashIcon, PlusIcon, MinusIcon, CardIcon } from '../components/ui';
 import { PaymentModal, MenuCompositionModal } from '../components/pos';
@@ -24,32 +24,9 @@ export const POSPage: React.FC = () => {
     const categories = getActiveCategories();
     const menus = getActiveMenus();
     const [activeCategory, setActiveCategory] = useState<number>(categories[0]?.id || 1);
-    const [isOnline, setIsOnline] = useState(navigator.onLine);
 
-    useEffect(() => {
-        const handleOnline = () => setIsOnline(true);
-        const handleOffline = () => setIsOnline(false);
+    // Removed local isOnline state and effect in favor of global sync store
 
-        window.addEventListener('online', handleOnline);
-        window.addEventListener('offline', handleOffline);
-
-        const checkBackend = async () => {
-            try {
-                await fetch('http://localhost:3001/api/stats', { method: 'HEAD' });
-                setIsOnline(true);
-            } catch {
-                setIsOnline(false);
-            }
-        };
-        // Check every 30s
-        const interval = setInterval(checkBackend, 30000);
-
-        return () => {
-            window.removeEventListener('online', handleOnline);
-            window.removeEventListener('offline', handleOffline);
-            clearInterval(interval);
-        };
-    }, []);
     const [activeTab, setActiveTab] = useState<'products' | 'menus'>('products');
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [selectedMenu, setSelectedMenu] = useState<Menu | null>(null);
@@ -60,7 +37,7 @@ export const POSPage: React.FC = () => {
     }, [activeCategory, products]);
     const sessionTotal = getSessionTotal();
     const lowStockCount = getLowStockProducts().length;
-    const { addToQueue } = useSyncStore();
+    const { addToQueue, isOnline } = useSyncStore();
 
     // Ref for category scroll navigation
     const categoriesRef = useRef<HTMLDivElement>(null);
