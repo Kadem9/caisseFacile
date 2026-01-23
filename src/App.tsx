@@ -41,6 +41,7 @@ const RoleRoute: React.FC<{
 // Import stores for sync
 import { startAutoSync, useSyncStore, useProductStore, useMenuStore } from './stores';
 import { useImageCacheStore } from './stores/imageCacheStore';
+import { logger, initGlobalErrorHandling } from './services/logger';
 import { useEffect, useState } from 'react';
 import { SplashScreen, UpdateChecker } from './components/ui';
 
@@ -51,6 +52,7 @@ function App() {
   useEffect(() => {
     const initializeApp = async () => {
       try {
+        await initGlobalErrorHandling();
         // Init Image Cache (Tauri only)
         const { initCache } = useImageCacheStore.getState();
         await initCache();
@@ -71,8 +73,10 @@ function App() {
         const { checkMissingCache } = useImageCacheStore.getState();
         await checkMissingCache([...products, ...menus]);
         console.log('[App] Image cache check complete');
+        logger.info('App initialized successfully');
       } catch (err) {
         console.error('[App] Failed to initialize app:', err);
+        logger.error('Failed to initialize app', err);
       }
     };
 
