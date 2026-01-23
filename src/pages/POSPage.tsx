@@ -30,7 +30,7 @@ export const POSPage: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'products' | 'menus'>('products');
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [selectedMenu, setSelectedMenu] = useState<Menu | null>(null);
-    const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' }));
+    const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }));
 
     // Use useMemo to ensure filteredProducts updates when activeCategory or products change
     const filteredProducts = useMemo(() => {
@@ -60,7 +60,7 @@ export const POSPage: React.FC = () => {
     // Clock
     useEffect(() => {
         const timer = setInterval(() => {
-            setCurrentTime(new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' }));
+            setCurrentTime(new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }));
         }, 1000); // Update every second to be accurate, though we only show minutes
         return () => clearInterval(timer);
     }, []);
