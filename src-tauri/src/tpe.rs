@@ -291,6 +291,48 @@ fn build_payment_message(amount_cents: u32, pos_number: &str) -> Vec<u8> {
     msg
 }
 
+/// Build a TLV ASCII PURE message (NO STX/ETX/LRC)
+/// Based on akretion/caisse-ap-ip Python implementation
+/// This format works for PAX A920 Pro in USB Slave mode
+/// Format: TAG(2 letters) + LENGTH(3 digits padded) + VALUE
+fn build_tlv_ascii_pure_message(amount_cents: u32, pos_id: &str) -> Vec<u8> {
+    // Helper to create a TLV field
+    fn tlv(tag: &str, value: &str) -> String {
+        format!("{}{:03}{}", tag, value.len(), value)
+    }
+    
+    let mut msg = String::new();
+    
+    // CZ = Protocol version (must be first!) - "0300" per akretion Python code
+    msg.push_str(&tlv("CZ", "0300"));
+    
+    // CJ = Concert Protocol Identifier (12 chars) - optional but helps
+    msg.push_str(&tlv("CJ", "012345678901"));
+    
+    // CA = POS number (caisse number)
+    let ca = if pos_id.is_empty() { "01" } else { pos_id };
+    msg.push_str(&tlv("CA", ca));
+    
+    // CE = Currency ISO number (978 = EUR)
+    msg.push_str(&tlv("CE", "978"));
+    
+    // BA = Answer mode: "0" = answer at end of transaction
+    msg.push_str(&tlv("BA", "0"));
+    
+    // CD = Transaction type: "0" = debit
+    msg.push_str(&tlv("CD", "0"));
+    
+    // CB = Amount in cents (NOT padded to 12, just the amount as string per Python code)
+    let amount_str = format!("{}", amount_cents);
+    msg.push_str(&tlv("CB", &amount_str));
+    
+    println!("Built TLV ASCII PURE message ({}bytes): {}", msg.len(), msg);
+    log_to_file(&format!("TLV ASCII PURE: {}", msg));
+    
+    // Return as pure ASCII bytes - NO STX, NO ETX, NO LRC
+    msg.into_bytes()
+}
+
 /// Build a Caisse-AP over IP message (Concert V3 on TCP)
 /// Based on official protocol: https://github.com/akretion/caisse-ap-ip
 /// Format: TAG(2 letters) + LENGTH(3 digits) + VALUE
@@ -620,83 +662,32 @@ pub async fn send_tpe_payment(
     }
     
     // Serial connections use Concert V3 binary protocol
-    println!("--- CONCERT V3 MODE (Serial) ---");
+    println!("--- PAX TLV ASCII MODE (Serial/USB) ---");
 
     let result = tokio::task::spawn_blocking(move || {
         let mut stream = connect(&port_name, baud_rate)?;
         
-        // Step 1: ENQ
-        stream.write_all(&[ENQ]).map_err(|e| format!("ENQ failed: {}", e))?;
-        let _ = stream.flush();
-        std::thread::sleep(Duration::from_millis(200));
+        // PAX A920 Pro USB: Use TLV ASCII PURE format (like akretion/caisse-ap-ip for TCP)
+        // NO ENQ/ACK handshake required for this format - just send directly
         
-        let mut buf = [0u8; 64];
-        let handshake_res = match stream.read(&mut buf) {
-            Ok(n) if n > 0 => {
-                let hex = bytes_to_hex(&buf[..n]);
-                println!("Handshake received: {}", hex);
-                Some(buf[0])
-            },
-            _ => None
-        };
+        // Build and send TLV ASCII PURE message
+        let message = build_tlv_ascii_pure_message(amount_cents, &pos_number);
+        println!("Sending TLV ASCII PURE message: {}", String::from_utf8_lossy(&message));
+        log_to_file(&format!("Sending TLV ASCII PURE: {}", String::from_utf8_lossy(&message)));
         
-        if handshake_res != Some(ACK) {
-            println!("Handshake NOT ACK (expected 06, got {:?})", handshake_res);
-            if handshake_res == Some(ENQ) {
-                println!("TPE sent ENQ, replying with ACK...");
-                let _ = stream.write_all(&[ACK]);
-                let _ = stream.flush();
-                std::thread::sleep(Duration::from_millis(200));
-            }
-        } else {
-            println!("Handshake OK (ACK received)");
-        }
-        
-        // Step 2: Send Message
-        let message = build_payment_message(amount_cents, &pos_number);
-        println!("Sending standard message: {}", bytes_to_hex(&message));
         stream.write_all(&message).map_err(|e| format!("Send failed: {}", e))?;
         let _ = stream.flush();
         
-        // Step 3: Wait for ACK
-        std::thread::sleep(Duration::from_millis(500));
-        let mut ack_buf = [0u8; 64];
-        match stream.read(&mut ack_buf) {
-            Ok(n) if n > 0 => {
-                 let raw = bytes_to_hex(&ack_buf[..n]);
-                 println!("ACK step received: {}", raw);
-                 
-                 // If TPE sends ENQ, it might expect an ACK from POS
-                 if ack_buf[0] == ENQ && n == 1 {
-                    println!("TPE sent ENQ, replying with ACK...");
-                    let _ = stream.write_all(&[ACK]);
-                    let _ = stream.flush();
-                    // Optionally wait a bit more for a real ACK or proceed to Step 4
-                 }
-
-                 // If format rejected (ENQ EOT or NAK), try alternate format
-                 if (ack_buf[0] == ENQ || ack_buf[0] == EOT || ack_buf[0] == NAK) && !port_name.ends_with("+ASCII") {
-                    log_to_file("Standard format rejected, trying simple ASCII");
-                    println!("Standard format rejected ({}). Attempting ASCII fallback...", raw);
-                    return try_alternate_format(&mut stream, amount_cents);
-                }
-            }
-            _ => {
-                log_to_file("No ACK received");
-                println!("No ACK received after message");
-            }
-        }
+        // Wait for response (up to 120s for payment)
+        log_to_file("Waiting for PAX response...");
+        println!("Waiting for PAX response...");
         
-        // Step 4: Wait for Response (120s)
-        log_to_file("Waiting for payment...");
-        
-        // Since we are in a blocking thread with a trait object, we can't easily set timeout on the trait directly
-        // But the connect_tcp/connect_serial sets internal timeouts.
-        // We will loop with reads.
-        
-        let mut response = [0u8; 256];
+        let mut response = [0u8; 512];
         let mut total = 0;
         let start = std::time::Instant::now();
+        
+        // Set longer timeout for the read
+        let _ = stream.set_read_timeout(Some(Duration::from_secs(120)));
         
         loop {
             if start.elapsed().as_secs() > 120 {
@@ -707,47 +698,67 @@ pub async fn send_tpe_payment(
             match stream.read(&mut response[total..]) {
                 Ok(n) if n > 0 => {
                     let chunk = &response[total..total+n];
-                    let current_raw = bytes_to_hex(chunk);
-                    println!("Received data chunk: {}", current_raw);
+                    let chunk_hex = bytes_to_hex(chunk);
+                    let chunk_ascii = String::from_utf8_lossy(chunk);
+                    println!("Received {} bytes: HEX={} ASCII={}", n, chunk_hex, chunk_ascii);
+                    log_to_file(&format!("Received: HEX={} ASCII={}", chunk_hex, chunk_ascii));
                     
-                    // CRITICAL: If TPE sends ENQ, it's asking if we are ready to receive the response.
-                    // We must reply with ACK (06).
-                    if chunk.contains(&ENQ) {
-                        println!("TPE sent ENQ in response loop, replying with ACK...");
-                        let _ = stream.write_all(&[ACK]).ok();
-                        let _ = stream.flush().ok();
-                        // Don't break, wait for the actual STX...ETX data
-                    }
-
                     total += n;
                     
-                    // Stop if we have a full message or terminal aborts
+                    // Check for end of message indicators
+                    // TLV response might end with a specific tag or just stop
+                    // Also check for ETX (0x03) in case it's wrapped
                     if response[..total].contains(&ETX) {
-                        println!("End of response message detected (ETX)");
+                        println!("ETX found - message complete");
                         break;
                     }
                     
-                    if response[..total].contains(&EOT) && !response[..total].contains(&STX) {
-                        println!("Terminal sent EOT (Abort/End) without data.");
-                        break;
+                    // If we have enough data and no more is coming, consider it complete
+                    // Wait a bit and try one more read
+                    if total > 10 {
+                        std::thread::sleep(Duration::from_millis(200));
+                        match stream.read(&mut response[total..]) {
+                            Ok(n2) if n2 > 0 => {
+                                total += n2;
+                                println!("Got {} more bytes after pause", n2);
+                            },
+                            _ => {
+                                println!("No more data after pause - assuming complete");
+                                break;
+                            }
+                        }
                     }
                 }
-                Ok(_) => std::thread::sleep(Duration::from_millis(200)),
+                Ok(_) => {
+                    // Empty read - wait a bit
+                    if total > 0 {
+                        // We have some data, check if more is coming
+                        std::thread::sleep(Duration::from_millis(100));
+                        continue;
+                    }
+                    std::thread::sleep(Duration::from_millis(200));
+                },
                 Err(e) => {
-                     if e.kind() == std::io::ErrorKind::TimedOut || e.kind() == std::io::ErrorKind::WouldBlock {
-                         continue;
-                     }
-                     println!("Read error during payment: {}", e);
-                     return Err(format!("Read error: {}", e));
+                    if e.kind() == std::io::ErrorKind::TimedOut || e.kind() == std::io::ErrorKind::WouldBlock {
+                        if total > 0 {
+                            println!("Timeout after receiving {} bytes - assuming complete", total);
+                            break;
+                        }
+                        continue;
+                    }
+                    println!("Read error during payment: {}", e);
+                    return Err(format!("Read error: {}", e));
                 }
             }
         }
         
-        let _ = stream.write_all(&[ACK]);
+        if total == 0 {
+            return Err("No response from TPE".to_string());
+        }
         
         let raw = bytes_to_hex(&response[..total]);
         println!("Final raw response from TPE: {}", raw);
-        log_to_file(&format!("Data: {}", raw));
+        log_to_file(&format!("Final response: {}", raw));
         parse_response(&response[..total], amount_cents, &raw)
     }).await;
 
