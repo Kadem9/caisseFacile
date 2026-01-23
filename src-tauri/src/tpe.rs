@@ -87,6 +87,8 @@ fn connect_tcp(address: &str) -> Result<Box<dyn TpeStream>, String> {
         Ok(stream) => {
             stream.set_read_timeout(Some(Duration::from_secs(10))).ok();
             stream.set_write_timeout(Some(Duration::from_secs(10))).ok();
+            // OPTIMIZATION: Disable Nagle's algorithm for lower latency
+            stream.set_nodelay(true).ok();
             Ok(Box::new(stream))
         },
         Err(e) => {
@@ -415,7 +417,7 @@ pub async fn send_tpe_payment(
                         if total_read > 0 {
                             break; // Got data and connection closed
                         }
-                        std::thread::sleep(Duration::from_millis(100));
+                        std::thread::sleep(Duration::from_millis(10)); // Reduced from 100ms
                     }
                     Ok(n) => {
                         total_read += n;
@@ -424,7 +426,7 @@ pub async fn send_tpe_payment(
                         // Check if we have a complete message (ETX=0x03)
                         if response_buf[..total_read].contains(&0x03) {
                              // Give a bit of time for LRC
-                             std::thread::sleep(Duration::from_millis(200));
+                             std::thread::sleep(Duration::from_millis(10)); // Reduced from 200ms
                              // Try one more read just in case
                              if let Ok(n2) = stream.read(&mut response_buf[total_read..]) {
                                  if n2 > 0 { total_read += n2; }
@@ -432,15 +434,15 @@ pub async fn send_tpe_payment(
                              break;
                         }
                         
-                        // Otherwise continue reading
-                        std::thread::sleep(Duration::from_millis(50));
+                        // Otherwise continue reading immediately or small sleep if fragmentation likely
+                        // std::thread::sleep(Duration::from_millis(50)); Removed to speed up
                     }
                     Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                        std::thread::sleep(Duration::from_millis(100));
+                        std::thread::sleep(Duration::from_millis(10)); // Reduced from 100ms
                         continue;
                     }
                     Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => {
-                        std::thread::sleep(Duration::from_millis(100));
+                        std::thread::sleep(Duration::from_millis(10)); // Reduced from 100ms
                         continue;
                     }
                     Err(e) => {
@@ -456,7 +458,7 @@ pub async fn send_tpe_payment(
                 println!("Sending ACK to confirm receipt...");
                 let _ = stream.write_all(&[0x06]);
                 let _ = stream.flush();
-                std::thread::sleep(Duration::from_millis(500));
+                std::thread::sleep(Duration::from_millis(100)); // Reduced from 500ms
                 
                 let response_str = String::from_utf8_lossy(&response_buf[..total_read]).to_string();
                 let response_hex = bytes_to_hex(&response_buf[..total_read]);
@@ -518,7 +520,17 @@ pub async fn send_tpe_payment(
                 log_to_file(&format!("DECISION: Success={}, AC={:?}, CV={:?}, CO={:?}", result_success, ac, cv, co));
                 
                 let error_msg = if !result_success {
-                    Some(format!("Transaction Refused (Tags: {:?})", response_tags))
+                    // Cleaner error message for user
+                    log_to_file(&format!("Transaction Refused DETAILS: {:?}", response_tags));
+                    
+                    // Try to find a meaningful error cause
+                    if let Some(co_val) = co {
+                        Some(format!("Paiement refusé (Code: {})", co_val))
+                    } else if let Some(cv_val) = cv {
+                        Some(format!("Paiement refusé (Validation: {})", cv_val))
+                    } else {
+                        Some("Paiement refusé".to_string())
+                    }
                 } else {
                     None
                 };
