@@ -110,7 +110,7 @@ mod escpos {
     pub const BOLD_ON: [u8; 3] = [ESC, b'E', 1];
     pub const BOLD_OFF: [u8; 3] = [ESC, b'E', 0];
     pub const DOUBLE_HEIGHT_ON: [u8; 3] = [GS, b'!', 0x10];
-    pub const DOUBLE_WIDTH_ON: [u8; 3] = [GS, b'!', 0x20];
+    // pub const DOUBLE_WIDTH_ON: [u8; 3] = [GS, b'!', 0x20]; // Unused
     pub const DOUBLE_SIZE_ON: [u8; 3] = [GS, b'!', 0x30];
     pub const NORMAL_SIZE: [u8; 3] = [GS, b'!', 0x00];
     

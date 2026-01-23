@@ -11,8 +11,10 @@ use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
-// use tokio::time::sleep; // Removed unused import
+use std::sync::atomic::{AtomicBool, Ordering};
 
+// Global cancellation flag to interrupt blocking TPE operations
+static TPE_CANCEL_FLAG: AtomicBool = AtomicBool::new(false);
 // ===================================
 // Types
 // ===================================
@@ -58,6 +60,7 @@ const ACK: u8 = 0x06;
 const NAK: u8 = 0x15;
 const ENQ: u8 = 0x05;
 const EOT: u8 = 0x04;
+const CAN: u8 = 0x18;
 
 // ===================================
 // Abstraction Layer (Serial vs TCP)
@@ -79,11 +82,11 @@ fn connect(connection_str: &str, baud_rate: u32) -> Result<Box<dyn TpeStream>, S
 
 fn connect_tcp(address: &str) -> Result<Box<dyn TpeStream>, String> {
     log_to_file(&format!("Connecting TCP to {}", address));
-    // Standard connection timeout
-    match TcpStream::connect_timeout(&address.parse().map_err(|e| format!("Invalid IP: {}", e))?, Duration::from_secs(3)) {
+    // Standard connection timeout increased to 10s for slow terminals/wakeup
+    match TcpStream::connect_timeout(&address.parse().map_err(|e| format!("Invalid IP: {}", e))?, Duration::from_secs(10)) {
         Ok(stream) => {
-            stream.set_read_timeout(Some(Duration::from_secs(5))).ok();
-            stream.set_write_timeout(Some(Duration::from_secs(5))).ok();
+            stream.set_read_timeout(Some(Duration::from_secs(10))).ok();
+            stream.set_write_timeout(Some(Duration::from_secs(10))).ok();
             Ok(Box::new(stream))
         },
         Err(e) => {
@@ -143,13 +146,27 @@ pub async fn test_tpe_connection(port_name: String, baud_rate: u32) -> TpeTestRe
     log_to_file(&format!("=== TEST CONNECTION {} ===", port_name));
     
     let result = tokio::task::spawn_blocking(move || {
+        let clean_str = port_name.trim_end_matches("+ASCII");
+        let is_tcp = clean_str.contains(':');
+        
         let stream_res = connect(&port_name, baud_rate);
         
         match stream_res {
             Ok(mut stream) => {
                 log_to_file("Connection opened");
                 
-                // Send ENQ
+                // For TCP (Nepting), just verify connection works
+                // The TPE may not respond to ENQ as it uses TLV protocol
+                if is_tcp {
+                    log_to_file("TCP connection successful (Nepting mode)");
+                    return TpeTestResult {
+                        connected: true,
+                        message: "Connected to TPE via TCP ✓".to_string(),
+                        raw_data: None,
+                    };
+                }
+                
+                // For Serial (Concert), send ENQ and expect ACK
                 if let Err(e) = stream.write_all(&[ENQ]) {
                     return TpeTestResult {
                         connected: false,
@@ -185,7 +202,7 @@ pub async fn test_tpe_connection(port_name: String, baud_rate: u32) -> TpeTestRe
                     Err(e) => {
                         log_to_file(&format!("Read error: {}", e));
                         TpeTestResult {
-                            connected: false, // Treat timeout as not connected for test
+                            connected: false,
                             message: format!("Error: {}", e),
                             raw_data: None,
                         }
@@ -244,9 +261,11 @@ fn build_payment_message(amount_cents: u32, pos_number: &str) -> Vec<u8> {
     msg
 }
 
-/// Build a TLV (Type-Length-Value) message for Nepting terminals
-/// Format: TAG(2 chars) + LENGTH(3 digits) + VALUE
-fn build_nepting_tlv_payment(amount_cents: u32, pos_id: &str, transaction_id: &str) -> String {
+/// Build a Caisse-AP over IP message (Concert V3 on TCP)
+/// Based on official protocol: https://github.com/akretion/caisse-ap-ip
+/// Format: TAG(2 letters) + LENGTH(3 digits) + VALUE
+/// Wrapped in STX ... ETX+LRC
+fn build_caisse_ap_ip_message(amount_cents: u32, pos_id: &str) -> Vec<u8> {
     // Helper to create a TLV field
     fn tlv(tag: &str, value: &str) -> String {
         format!("{}{:03}{}", tag, value.len(), value)
@@ -254,39 +273,64 @@ fn build_nepting_tlv_payment(amount_cents: u32, pos_id: &str, transaction_id: &s
     
     let mut msg = String::new();
     
-    // PT = Protocol version (must be first)
-    msg.push_str(&tlv("PT", "001"));
+    // CZ = Protocol version (must be first!) - "0300" for version 3.0
+    msg.push_str(&tlv("CZ", "0300"));
     
-    // OP = Operation type (PAY = payment)
-    msg.push_str(&tlv("OP", "PAY"));
+    // CJ = Concert Protocol Identifier (Standard)
+    // Reverted to default. Refusal seems to be TPE configuration or bank side.
+    msg.push_str(&tlv("CJ", "012345678901"));
     
-    // AM = Amount in smallest currency unit (centimes)
-    let amount_str = format!("{}", amount_cents);
-    msg.push_str(&tlv("AM", &amount_str));
+    // CA = POS number (caisse number)
+    // Reverted to standard "01" after testing "1".
+    let ca = if pos_id.is_empty() { "01" } else { pos_id };
+    msg.push_str(&tlv("CA", ca));
     
-    // CU = Currency (ISO 4217: EUR)
-    msg.push_str(&tlv("CU", "EUR"));
+    // CE = Currency ISO number (978 = EUR)
+    msg.push_str(&tlv("CE", "978"));
     
-    // CR = Cash Register ID
-    let cr_id = if pos_id.is_empty() { "P1" } else { pos_id };
-    msg.push_str(&tlv("CR", cr_id));
+    // BA = Answer mode: "0" = answer at end of transaction
+    // "1" failed (timeout/no response). Reverting to "0".
+    msg.push_str(&tlv("BA", "0"));
     
-    // TI = Transaction ID (unique identifier)
-    let tx_id = if transaction_id.is_empty() { 
-        format!("TX{}", std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs() % 1000000)
-    } else { 
-        transaction_id.to_string() 
-    };
+    // CD = Transaction type: "0" = debit
+    msg.push_str(&tlv("CD", "0"));
+    
+    // CB = Amount in cents (12 digits padded)
+    let amount_str = format!("{:012}", amount_cents);
+    msg.push_str(&tlv("CB", &amount_str));
+    
+    // TI = Transaction ID (Numeric only - 6 digits)
+    let tx_id = format!("{:06}", std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() % 1000000);
     msg.push_str(&tlv("TI", &tx_id));
     
-    // Add newline terminator (common for text-based APIs)
-    msg.push('\n');
+    // LB = Label on ticket (Optional)
+    msg.push_str(&tlv("LB", "CAISSE"));
     
-    println!("Built Nepting TLV message ({}bytes): {}", msg.len(), msg.trim());
-    msg
+    println!("Built Caisse-AP IP message Data ({}bytes): {}", msg.len(), msg);
+    
+    // Calculate LRC (XOR of all bytes in Data + ETX)
+    let mut lrc_input: Vec<u8> = msg.as_bytes().to_vec();
+    lrc_input.push(ETX);
+    let lrc = calculate_lrc(&lrc_input);
+    
+    let mut framed_msg: Vec<u8> = Vec::new();
+    framed_msg.push(STX);
+    framed_msg.extend_from_slice(msg.as_bytes());
+    framed_msg.push(ETX);
+    framed_msg.push(lrc);
+    
+    framed_msg
+}
+
+#[tauri::command]
+pub fn cancel_tpe_transaction() -> Result<String, String> {
+    println!("Requesting TPE cancellation...");
+    log_to_file("Requesting TPE cancellation...");
+    TPE_CANCEL_FLAG.store(true, Ordering::SeqCst);
+    Ok("Cancellation requested".to_string())
 }
 
 #[tauri::command]
@@ -296,6 +340,9 @@ pub async fn send_tpe_payment(
     pos_number: String,
     amount_cents: u32,
 ) -> Result<TpePaymentResponse, String> {
+    // Reset cancellation flag at start of new transaction
+    TPE_CANCEL_FLAG.store(false, Ordering::SeqCst);
+    
     log_to_file(&format!("=== PAY {} cents on {} ===", amount_cents, port_name));
     
     // Explicit ASCII mode requested (legacy fallback)
@@ -307,8 +354,194 @@ pub async fn send_tpe_payment(
          }).await.map_err(|e| format!("Thread error: {}", e))?;
     }
     
-    // All connections use Concert V3 protocol (both TCP and Serial)
-    println!("--- CONCERT V3 MODE ---");
+    // Check if TCP connection (IP:port format)
+    // Strip legacy +ASCII suffix if present
+    let clean_str = port_name.trim_end_matches("+ASCII").trim();
+    let is_tcp = clean_str.contains(':');
+    
+    // TCP connections use Caisse-AP over IP (ASCII TLV format)
+    if is_tcp {
+        println!("--- CAISSE-AP IP MODE ---");
+        let pos_number_clone = pos_number.clone();
+        let connection_addr = clean_str.to_string();
+        
+        // Debug: Log exact bytes of address to catch hidden chars
+        println!("Connecting to address: '{}' (Bytes: {:?})", connection_addr, connection_addr.as_bytes());
+        log_to_file(&format!("Connecting to address: '{}'", connection_addr));
+        
+        return tokio::task::spawn_blocking(move || {
+            // Use the CLEAN address for connection
+            let mut stream = connect(&connection_addr, 0)?; // baud_rate ignored for TCP
+            
+            // Always use standard Caisse-AP (Concert V3)
+            println!("--- CAISSE-AP (CONCERT) MODE ---");
+            let message_bytes = build_caisse_ap_ip_message(amount_cents, &pos_number_clone);
+            
+            println!("Sending Payment Request ({} bytes)", message_bytes.len());
+            // Log hex for debugging
+            log_to_file(&format!("Sending Hex: {}", bytes_to_hex(&message_bytes)));
+            
+            stream.write_all(&message_bytes).map_err(|e| format!("Send failed: {}", e))?;
+            let _ = stream.flush();
+            
+            // Wait for response (up to 150 seconds for payment to allow user interaction)
+            println!("Waiting for Caisse-AP response...");
+            log_to_file("Waiting for Caisse-AP response...");
+            
+            let mut response_buf = [0u8; 1024];
+            let mut total_read = 0;
+            let start = std::time::Instant::now();
+            let timeout = Duration::from_secs(150);
+            
+            while start.elapsed() < timeout {
+                if TPE_CANCEL_FLAG.load(Ordering::SeqCst) {
+                     println!("!!! CANCELLATION REQUESTED !!!");
+                     log_to_file("!!! CANCELLATION REQUESTED !!! - Sending CAN sequence");
+                     // Send CAN (0x18) x 3 + EOT (0x04) to force cancel
+                     let _ = stream.write_all(&[CAN, CAN, CAN, EOT]); 
+                     let _ = stream.flush();
+                     return Ok(TpePaymentResponse {
+                         success: false,
+                         transaction_result: "CANCELLED".to_string(),
+                         amount_cents,
+                         authorization_number: None,
+                         error_message: Some("Transaction cancelled by user".to_string()),
+                         raw_response: None,
+                     });
+                }
+
+                match stream.read(&mut response_buf[total_read..]) {
+                    Ok(0) => {
+                        if total_read > 0 {
+                            break; // Got data and connection closed
+                        }
+                        std::thread::sleep(Duration::from_millis(100));
+                    }
+                    Ok(n) => {
+                        total_read += n;
+                        println!("Received {} bytes: {}", n, String::from_utf8_lossy(&response_buf[..total_read]));
+                        
+                        // Check if we have a complete message (ETX=0x03)
+                        if response_buf[..total_read].contains(&0x03) {
+                             // Give a bit of time for LRC
+                             std::thread::sleep(Duration::from_millis(200));
+                             // Try one more read just in case
+                             if let Ok(n2) = stream.read(&mut response_buf[total_read..]) {
+                                 if n2 > 0 { total_read += n2; }
+                             }
+                             break;
+                        }
+                        
+                        // Otherwise continue reading
+                        std::thread::sleep(Duration::from_millis(50));
+                    }
+                    Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                        std::thread::sleep(Duration::from_millis(100));
+                        continue;
+                    }
+                    Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => {
+                        std::thread::sleep(Duration::from_millis(100));
+                        continue;
+                    }
+                    Err(e) => {
+                        log_to_file(&format!("Read error: {}", e));
+                        return Err(format!("Read error: {}", e));
+                    }
+                }
+            }
+            
+            if total_read > 0 {
+                // IMPORTANT: Some terminals expect an ACK after sending their response
+                // otherwise they might consider the transaction as failed/refused.
+                println!("Sending ACK to confirm receipt...");
+                let _ = stream.write_all(&[0x06]);
+                let _ = stream.flush();
+                std::thread::sleep(Duration::from_millis(500));
+                
+                let response_str = String::from_utf8_lossy(&response_buf[..total_read]).to_string();
+                let response_hex = bytes_to_hex(&response_buf[..total_read]);
+                
+                println!("Caisse-AP RAW HEX: {}", response_hex);
+                println!("Caisse-AP RAW STR: {}", response_str);
+                log_to_file(&format!("RAW HEX: {}", response_hex));
+                log_to_file(&format!("RAW STR: {}", response_str));
+                
+                // Parse Caisse-AP response manually and robustly
+                let mut response_tags = Vec::new();
+                let mut p = 0;
+                let bytes = response_str.as_bytes();
+                let len = bytes.len();
+                
+                // Basic TLV parser: Tag(2) + Len(3) + Value(Len)
+                while p + 5 <= len {
+                    // Try to parse length at p+2
+                    let len_slice = &bytes[p+2..p+5];
+                    if let Ok(len_str) = std::str::from_utf8(len_slice) {
+                        if let Ok(value_len) = len_str.parse::<usize>() {
+                            if p + 5 + value_len <= len {
+                                let tag = String::from_utf8_lossy(&bytes[p..p+2]).to_string();
+                                let value = String::from_utf8_lossy(&bytes[p+5..p+5+value_len]).to_string();
+                                response_tags.push((tag, value));
+                                p += 5 + value_len;
+                                continue;
+                            }
+                        }
+                    }
+                    // If parsing failed, advance by 1 byte to try finding sync
+                    p += 1;
+                }
+                
+                println!("Parsed tags: {:?}", response_tags);
+                log_to_file(&format!("Parsed tags: {:?}", response_tags));
+                
+                // Determine success
+                // CV = Code Validation (00 = OK)
+                // CO = Code Reponse (00 = OK)
+                // AC = Authorization Code (If returned, usually means success)
+                // AL = Autorisation Logiciel (Often 1 but can be ignored if AC is present)
+                let cv = response_tags.iter().find(|(t, _)| t == "CV").map(|(_, v)| v.as_str());
+                let co = response_tags.iter().find(|(t, _)| t == "CO").map(|(_, v)| v.as_str());
+                let ac = response_tags.iter().find(|(t, _)| t == "AC").map(|(_, v)| v.as_str());
+                let al = response_tags.iter().find(|(t, _)| t == "AL").map(|(_, v)| v.as_str());
+                
+                // Logic: 
+                // 1. Classic success: CV=00 or CO=00
+                // 2. Auth success: AC exists and is not empty (ignoring AL=1 in this case)
+                let has_auth_code = ac.map_or(false, |v| !v.is_empty());
+                let is_approved_classic = matches!(cv, Some("00")) || matches!(co, Some("00"));
+                
+                // Success if Classic OK OR Has Auth Code
+                let result_success = is_approved_classic || has_auth_code;
+                
+                println!("DECISION: Success={}, Classic={}, HasAuthCode={}, TagAL={:?}", 
+                    result_success, is_approved_classic, has_auth_code, al);
+                log_to_file(&format!("DECISION: Success={}, AC={:?}, CV={:?}, CO={:?}", result_success, ac, cv, co));
+                
+                let error_msg = if !result_success {
+                    Some(format!("Transaction Refused (Tags: {:?})", response_tags))
+                } else {
+                    None
+                };
+                
+                let auth_num = ac.map(|v| v.to_string());
+                
+                Ok(TpePaymentResponse {
+                    success: result_success,
+                    transaction_result: if result_success { "APPROVED".to_string() } else { "REFUSED".to_string() },
+                    amount_cents,
+                    authorization_number: None,
+                    error_message: error_msg,
+                    raw_response: Some(response_str),
+                })
+            } else {
+                log_to_file("No response from TPE");
+                Err("No response from TPE (timeout)".to_string())
+            }
+        }).await.map_err(|e| format!("Thread error: {}", e))?;
+    }
+    
+    // Serial connections use Concert V3 binary protocol
+    println!("--- CONCERT V3 MODE (Serial) ---");
 
     let result = tokio::task::spawn_blocking(move || {
         let mut stream = connect(&port_name, baud_rate)?;
@@ -478,12 +711,14 @@ fn parse_response(data: &[u8], amount_cents: u32, raw: &str) -> Result<TpePaymen
     })
 }
 
-/// Send payment using Nepting TLV protocol (for TCP connections)
+// function build_nepting_message removed
+
+/// Send payment using Caisse-AP protocol (for TCP connections) - UNUSED, kept for reference
 fn send_nepting_payment(address: &str, amount_cents: u32, pos_id: &str) -> Result<TpePaymentResponse, String> {
-    log_to_file(&format!("Nepting payment: {} cents to {}", amount_cents, address));
+    log_to_file(&format!("Caisse-AP payment: {} cents to {}", amount_cents, address));
     
-    // Build TLV message
-    let tlv_message = build_nepting_tlv_payment(amount_cents, pos_id, "");
+    // Build Caisse-AP message
+    let tlv_message = build_caisse_ap_ip_message(amount_cents, pos_id);
     
     // Connect to terminal
     let clean_addr = address.trim_end_matches("+ASCII");
@@ -496,8 +731,8 @@ fn send_nepting_payment(address: &str, amount_cents: u32, pos_id: &str) -> Resul
     stream.set_write_timeout(Some(Duration::from_secs(5))).ok();
     
     // Send TLV message (no ENQ/ACK handshake needed)
-    println!("Sending TLV: {}", tlv_message);
-    stream.write_all(tlv_message.as_bytes())
+    println!("Sending TLV (hex): {}", bytes_to_hex(&tlv_message));
+    stream.write_all(&tlv_message)
         .map_err(|e| format!("Send TLV failed: {}", e))?;
     stream.flush().ok();
     
@@ -613,19 +848,7 @@ fn send_nepting_payment(address: &str, amount_cents: u32, pos_id: &str) -> Resul
     })
 }
 
-#[tauri::command]
-pub async fn cancel_tpe_transaction(port_name: String, baud_rate: u32) -> Result<String, String> {
-    let result = tokio::task::spawn_blocking(move || {
-        let mut stream = connect(&port_name, baud_rate)?;
-        stream.write_all(&[EOT]).map_err(|e| format!("Cancel failed: {}", e))?;
-        Ok("Cancel Sent".to_string())
-    }).await;
-    
-    match result {
-        Ok(res) => res,
-        Err(e) => Err(format!("Thread error: {}", e))
-    }
-}
+
 
 /// Try alternate ASCII format (Simple "DEBIT X.XX EUR")
 fn try_alternate_format(stream: &mut Box<dyn TpeStream>, amount_cents: u32) -> Result<TpePaymentResponse, String> {

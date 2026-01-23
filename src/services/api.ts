@@ -203,11 +203,29 @@ export async function syncCategories(categories: Category[]): Promise<SyncResult
     };
 }
 
+export async function syncUsers(users: User[]): Promise<SyncResult> {
+    const result = await apiRequest<SyncResult>('/api/sync/users', {
+        method: 'POST',
+        body: JSON.stringify({ users }),
+    });
+
+    if (result.success && result.data) {
+        return result.data;
+    }
+
+    return {
+        success: false,
+        count: 0,
+        error: result.error || 'Unknown error',
+    };
+}
+
 export async function getSyncDiff(lastSync: string): Promise<{
     ts: string;
     products: Product[];
     menus: Menu[];
     categories: Category[];
+    users: User[];
 }> {
     const response = await fetch(`${getApiUrl()}/api/sync/diff?since=${lastSync}`);
     if (!response.ok) {

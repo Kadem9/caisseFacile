@@ -519,9 +519,18 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                                     variant="secondary"
                                     size="xl"
                                     isFullWidth
-                                    onClick={() => {
-                                        setTpeStatus('idle');
-                                        setTpeMessage('');
+                                    onClick={async () => {
+                                        try {
+                                            await invoke('cancel_tpe_transaction');
+                                            setTpeMessage('Annulation envoyée...');
+                                        } catch (e) {
+                                            console.error('Cancel failed', e);
+                                        }
+                                        // Wait a moment before resetting UI to allow backend to finish
+                                        setTimeout(() => {
+                                            setTpeStatus('idle');
+                                            setTpeMessage('');
+                                        }, 500);
                                     }}
                                 >
                                     <XIcon size={18} /> Annuler

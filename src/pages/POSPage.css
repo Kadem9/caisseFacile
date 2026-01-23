@@ -375,7 +375,7 @@
 .pos-products__grid {
     flex: 1;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
     gap: 1rem;
     padding: 0 1.5rem 1.5rem;
     overflow-y: auto;

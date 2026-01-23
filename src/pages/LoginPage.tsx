@@ -9,8 +9,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { confirm } from '@tauri-apps/plugin-dialog';
 import { UserCard } from '../components/auth';
 import { NumPad, PinDisplay, PowerIcon, XIcon } from '../components/ui';
-import { useAuthStore, useTransactionStore } from '../stores';
-import { fetchUsers, getApiUrl } from '../services/api';
+import { useAuthStore, useTransactionStore, useSyncStore } from '../stores';
 import { generateAndSaveDailyReport } from '../utils/autoBackup';
 import type { User } from '../types';
 import './LoginPage.css';
@@ -20,45 +19,28 @@ const PIN_LENGTH = 4;
 
 export const LoginPage: React.FC = () => {
     const navigate = useNavigate();
-    const { login } = useAuthStore();
+    // Use store directly for users (offline support)
+    // Use store directly for users (offline support)
+    const { availableUsers, login } = useAuthStore();
     const { transactions } = useTransactionStore();
+    // Pull updates when page loads to get latest users if online
+    const { pullUpdates } = useSyncStore();
 
-    const [users, setUsers] = useState<User[]>([]);
+    // Local state for UI only
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
     const [pin, setPin] = useState('');
     const [isError, setIsError] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
-    const [loadError, setLoadError] = useState<string | null>(null);
     const [backupStatus, setBackupStatus] = useState<string | null>(null);
 
-    const loadUsers = useCallback(async () => {
-        setIsLoading(true);
-        setLoadError(null);
-        try {
-            const apiUrl = getApiUrl();
-            console.log(`[Login] Fetching users from: ${apiUrl}/api/users`);
-            const result = await fetchUsers();
-            console.log('[Login] Fetch result:', result);
-            if (result.success) {
-                const activeUsers = result.users.filter(u => u.isActive);
-                setUsers(activeUsers);
-                if (activeUsers.length === 0) {
-                    setLoadError(`Aucun profil actif trouvé sur le serveur.`);
-                }
-            } else {
-                setLoadError(`Le serveur a renvoyé une erreur.`);
-            }
-        } catch (err: any) {
-            console.error('Failed to load users:', err);
-            setLoadError(`Erreur de connexion au serveur (${getApiUrl()})`);
-        } finally {
-            setIsLoading(false);
-        }
-    }, []);
-
     useEffect(() => {
-        loadUsers();
-    }, [loadUsers]);
+        // Trigger background sync on load
+        pullUpdates().catch(console.error);
+    }, [pullUpdates]);
+
+    // Derived state
+    const users = availableUsers.filter(u => u.isActive);
+    const loadError = users.length === 0 ? "Aucun utilisateur trouvé (vérifiez la connexion si c'est le premier lancement)" : null;
 
     const handleUserSelect = useCallback((user: User) => {
         setSelectedUser(user);
@@ -195,8 +177,8 @@ export const LoginPage: React.FC = () => {
                             ) : loadError ? (
                                 <div className="login-page__error-container">
                                     <p className="login-page__error-msg">{loadError}</p>
-                                    <button onClick={loadUsers} className="login-page__retry-btn">
-                                        Réessayer
+                                    <button onClick={() => pullUpdates()} className="login-page__retry-btn">
+                                        Réessayer de synchroniser
                                     </button>
                                 </div>
                             ) : (

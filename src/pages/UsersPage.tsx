@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { fetchUsers, createUser, updateUser, deleteUser } from '../services/api';
+import { useAuthStore, useSyncStore } from '../stores';
+// removed direct api imports
 import { Button, PlusIcon, EditIcon, TrashIcon, UserIcon, CheckIcon, XIcon, SearchIcon, ArrowLeftIcon } from '../components/ui';
 import { useNavigate } from 'react-router-dom';
 import { User, UserRole } from '../types';
@@ -8,8 +9,11 @@ import './UsersPage.css';
 
 export const UsersPage: React.FC = () => {
     const navigate = useNavigate();
-    const [users, setUsers] = useState<User[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+    // Use store instead of local state
+    const { availableUsers, addUser, updateUser, deleteUser } = useAuthStore();
+    const { pullUpdates } = useSyncStore();
+
+    const [isLoading, setIsLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -22,24 +26,11 @@ export const UsersPage: React.FC = () => {
         isActive: true
     });
 
-    const loadUsers = useCallback(async () => {
-        setIsLoading(true);
-        try {
-            const result = await fetchUsers();
-            if (result.success) {
-                setUsers(result.users);
-            }
-        } catch (err) {
-            console.error('Failed to load users:', err);
-            alert('Erreur lors du chargement des utilisateurs');
-        } finally {
-            setIsLoading(false);
-        }
-    }, []);
-
+    // Initial load / Sync
     useEffect(() => {
-        loadUsers();
-    }, [loadUsers]);
+        setIsLoading(true);
+        pullUpdates().finally(() => setIsLoading(false));
+    }, [pullUpdates]);
 
     const handleBack = () => navigate('/admin/dashboard');
 
@@ -68,7 +59,7 @@ export const UsersPage: React.FC = () => {
         e.preventDefault();
         try {
             if (editingUser) {
-                await updateUser(editingUser.id!, {
+                updateUser(editingUser.id!, {
                     name: formData.name,
                     pin: formData.pin || undefined,
                     role: formData.role,
@@ -79,14 +70,13 @@ export const UsersPage: React.FC = () => {
                     alert('Le code PIN est obligatoire pour un nouvel utilisateur');
                     return;
                 }
-                await createUser({
+                addUser({
                     name: formData.name,
                     pin: formData.pin,
                     role: formData.role
                 });
             }
             setIsModalOpen(false);
-            loadUsers();
         } catch (err) {
             console.error('Failed to save user:', err);
             alert('Erreur lors de l\'enregistrement');
@@ -104,16 +94,15 @@ export const UsersPage: React.FC = () => {
         if (!confirmed) return;
 
         try {
-            await deleteUser(id);
-            loadUsers();
+            deleteUser(id);
         } catch (err) {
             console.error('Failed to delete user:', err);
             alert('Erreur lors de la suppression');
         }
     };
 
-    const filteredUsers = users.filter(u =>
-        u.name.toLowerCase().includes(searchTerm.toLowerCase())
+    const filteredUsers = availableUsers.filter(u =>
+        u.name.toLowerCase().includes(searchTerm.toLowerCase()) && u.isActive !== false
     );
 
     return (
@@ -125,7 +114,7 @@ export const UsersPage: React.FC = () => {
                 </Button>
                 <div className="users-header-info">
                     <h1>Gestion des Utilisateurs</h1>
-                    <p>{users.length} comptes configurés</p>
+                    <p>{filteredUsers.length} comptes configurés</p>
                 </div>
                 <Button variant="primary" onClick={() => handleOpenModal()} className="users-add-btn">
                     <PlusIcon size={20} />
@@ -146,10 +135,10 @@ export const UsersPage: React.FC = () => {
             </div>
 
             <div className="users-list">
-                {isLoading ? (
-                    <div className="users-loading">Chargement...</div>
-                ) : filteredUsers.length === 0 ? (
-                    <div className="users-empty">Aucun utilisateur trouvé</div>
+                {filteredUsers.length === 0 ? (
+                    <div className="users-empty">
+                        {isLoading ? 'Chargement...' : 'Aucun utilisateur trouvé'}
+                    </div>
                 ) : (
                     <div className="users-grid">
                         {filteredUsers.map(user => (

@@ -954,13 +954,28 @@ app.get('/api/sync/diff', (req, res) => {
             isActive: Boolean(c.isActive)
         }));
 
-        console.log('[Backend] /sync/diff returning categories:', categoriesFormatted.length, categoriesFormatted);
+        // Get updated users
+        const users = db.prepare(`
+            SELECT 
+                id, id as localId, name, pin_hash as pinHash, role, 
+                is_active as isActive, created_at as createdAt, updated_at as updatedAt
+            FROM users 
+            WHERE updated_at > ?
+        `).all(lastSync);
+
+        const usersFormatted = users.map(u => ({
+            ...u,
+            isActive: Boolean(u.isActive)
+        }));
+
+        console.log('[Backend] /sync/diff returning categories:', categoriesFormatted.length, 'users:', usersFormatted.length);
 
         res.json({
             ts: new Date().toISOString(),
             products: productsFormatted,
             menus: menusFormatted,
             categories: categoriesFormatted,
+            users: usersFormatted,
         });
     } catch (error) {
         console.error('Sync diff error:', error);
@@ -1330,6 +1345,70 @@ app.post('/api/stock-movements', (req, res) => {
 });
 
 // ===== Users Management =====
+
+// Sync users
+app.post('/api/sync/users', (req, res) => {
+    try {
+        const { users } = req.body;
+        if (!Array.isArray(users)) {
+            return res.status(400).json({ error: 'Invalid users array' });
+        }
+
+        const insert = db.prepare(`
+            INSERT OR REPLACE INTO users 
+            (id, name, pin_hash, role, is_active, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `);
+
+        // If client sends localId, we might need to handle ID mapping if we want strict server authority.
+        // But for this simple offline-first, we can just upsert. 
+        // Note: Client generates numeric IDs. Server uses AUTOINCREMENT if we let it, but if we pass ID it uses it.
+        // SyncStore user sync sends 'User' object which has 'id'.
+
+        const now = new Date().toISOString();
+
+        const insertMany = db.transaction((items) => {
+            for (const u of items) {
+                // If it's a new user from client (negative or large temporary ID?), we might treat it differently.
+                // But typically SyncStore sends what it has.
+                // For simplicity, we accept the ID from client to keep consistency, 
+                // OR we check if exists.
+
+                // Let's assume we trust the ID if it matches existing or is new.
+                // Caution: ID collisions possible if multiple devices create users offline.
+                // Ideal: Client sends local_id, server assigns real ID.
+                // But our schema says: id INTEGER PRIMARY KEY AUTOINCREMENT
+                // We can insert with specific ID.
+
+                insert.run(
+                    u.id,
+                    u.name,
+                    u.pinHash,
+                    u.role,
+                    u.isActive ? 1 : 0,
+                    u.createdAt || now,
+                    u.updatedAt || now
+                );
+            }
+        });
+
+        insertMany(users);
+
+        db.prepare(`
+            INSERT INTO sync_log (entity_type, entity_count, status)
+            VALUES ('user', ?, 'success')
+        `).run(users.length);
+
+        res.json({
+            success: true,
+            count: users.length,
+            message: `${users.length} users synchronized`
+        });
+    } catch (error) {
+        console.error('Sync users error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
 
 // Get all users
 app.get('/api/users', (req, res) => {
