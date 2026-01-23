@@ -124,11 +124,14 @@ fn connect_tcp(address: &str) -> Result<Box<dyn TpeStream>, String> {
 }
 
 fn connect_serial(port_name: &str, baud_rate: u32) -> Result<Box<dyn TpeStream>, String> {
-    log_to_file(&format!("Opening Serial {} at {}", port_name, baud_rate));
+    log_to_file(&format!("Opening Serial {} at {} (8N1 mode)", port_name, baud_rate));
+    
+    // PAX A920 Pro and modern USB TPEs use 8N1 (8 data bits, No parity, 1 stop bit)
+    // This is different from legacy Ingenico terminals which use 7E1
     serialport::new(port_name, baud_rate)
         .timeout(Duration::from_secs(3))
-        .data_bits(serialport::DataBits::Seven)
-        .parity(serialport::Parity::Even)
+        .data_bits(serialport::DataBits::Eight)  // Changed from Seven to Eight
+        .parity(serialport::Parity::None)        // Changed from Even to None
         .stop_bits(serialport::StopBits::One)
         .open()
         .map_err(|e| {
@@ -138,6 +141,7 @@ fn connect_serial(port_name: &str, baud_rate: u32) -> Result<Box<dyn TpeStream>,
         })
         .map(|p| Box::new(p) as Box<dyn TpeStream>)
 }
+
 
 
 // ===================================
@@ -754,6 +758,13 @@ pub async fn send_tpe_payment(
 }
 
 fn parse_response(data: &[u8], amount_cents: u32, raw: &str) -> Result<TpePaymentResponse, String> {
+    // Enhanced logging for diagnosis
+    let ascii_repr = String::from_utf8_lossy(data);
+    println!("parse_response: {} bytes, HEX: {}", data.len(), raw);
+    println!("parse_response: ASCII: {}", ascii_repr);
+    log_to_file(&format!("parse_response: {} bytes, HEX: {}", data.len(), raw));
+    log_to_file(&format!("parse_response: ASCII: {}", ascii_repr));
+    
     let stx = data.iter().position(|&b| b == STX);
     let etx = data.iter().position(|&b| b == ETX);
     
@@ -842,13 +853,50 @@ fn parse_response(data: &[u8], amount_cents: u32, raw: &str) -> Result<TpePaymen
         }
     }
     
-    // No framing found - try raw interpretation
+    // No STX/ETX framing found - try to interpret raw data
+    // Some PAX terminals might send responses without standard framing
+    println!("No STX/ETX framing found, trying raw interpretation");
+    log_to_file("No STX/ETX framing found, trying raw interpretation");
+    
+    // Check if data contains only control bytes (ACK, EOT, ENQ, etc.)
+    if data.len() <= 3 && data.iter().all(|&b| b == ACK || b == EOT || b == ENQ || b == NAK) {
+        let control_names: Vec<&str> = data.iter().map(|b| match *b {
+            0x06 => "ACK",
+            0x04 => "EOT",
+            0x05 => "ENQ",
+            0x15 => "NAK",
+            _ => "?",
+        }).collect();
+        log_to_file(&format!("Response is just control bytes: {:?}", control_names));
+        
+        // If we only got ACK or EOT, the TPE might be waiting or finished
+        if data.contains(&ACK) && !data.contains(&NAK) {
+            return Ok(TpePaymentResponse {
+                success: false,
+                transaction_result: "WAITING".to_string(),
+                amount_cents,
+                authorization_number: None,
+                error_message: Some("TPE en attente. Insérez une carte.".to_string()),
+                raw_response: Some(raw.to_string()),
+            });
+        }
+    }
+    
+    // Try to find any recognizable pattern in the raw data
+    // Look for numeric status codes that might be embedded
+    let ascii_str = ascii_repr.to_string();
+    if ascii_str.contains("00") && ascii_str.len() >= 6 {
+        println!("Found '00' in raw data, might be success");
+        log_to_file("Found '00' in raw data, possible success indication");
+    }
+    
+    // Return diagnostic info for the user
     Ok(TpePaymentResponse {
         success: false,
         transaction_result: "?".to_string(),
         amount_cents,
         authorization_number: None,
-        error_message: Some("Réponse non reconnue du TPE".to_string()),
+        error_message: Some(format!("Réponse TPE: {} ({} bytes)", ascii_str.chars().take(50).collect::<String>(), data.len())),
         raw_response: Some(raw.to_string()),
     })
 }
