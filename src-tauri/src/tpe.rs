@@ -67,8 +67,32 @@ const CAN: u8 = 0x18;
 // ===================================
 
 // Trait object to handle both SerialPort and TcpStream
-trait TpeStream: Read + Write + Send {}
-impl<T: Read + Write + Send> TpeStream for T {}
+// Trait object to handle both SerialPort and TcpStream
+trait TpeStream: Read + Write + Send {
+    fn set_read_timeout(&mut self, duration: Option<Duration>) -> std::io::Result<()>;
+    fn set_write_timeout(&mut self, duration: Option<Duration>) -> std::io::Result<()>;
+}
+
+impl TpeStream for TcpStream {
+    fn set_read_timeout(&mut self, duration: Option<Duration>) -> std::io::Result<()> {
+        self.set_read_timeout(duration)
+    }
+    fn set_write_timeout(&mut self, duration: Option<Duration>) -> std::io::Result<()> {
+        self.set_write_timeout(duration)
+    }
+}
+
+impl TpeStream for Box<dyn serialport::SerialPort> {
+    fn set_read_timeout(&mut self, duration: Option<Duration>) -> std::io::Result<()> {
+        // SerialPort uses a single timeout for blocking operations
+        let d = duration.unwrap_or(Duration::from_secs(3600*24)); 
+        self.as_mut().set_timeout(d).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
+    }
+    fn set_write_timeout(&mut self, duration: Option<Duration>) -> std::io::Result<()> {
+         let d = duration.unwrap_or(Duration::from_secs(3600*24)); 
+         self.as_mut().set_timeout(d).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
+    }
+}
 
 fn connect(connection_str: &str, baud_rate: u32) -> Result<Box<dyn TpeStream>, String> {
     let clean_str = connection_str.trim_end_matches("+ASCII");
@@ -387,13 +411,8 @@ pub async fn send_tpe_payment(
             stream.flush().ok();
             
             // Wait for ACK
-            let mut buf = [0u8; 64];
-            match stream.peek(&mut buf) {
-                Ok(_) => {
-                    // Just peek to see if data comes, we'll read it properly
-                }
-                Err(_) => {}
-            }
+            // buf/peek removed as peek is not supported on Trait Object easily
+            // We just read with a short timeout.
             
             // Short read to get ACK
             // We use a short timeout because if it's NEPTING pure IP, it might not ACK.
