@@ -854,9 +854,71 @@ fn parse_response(data: &[u8], amount_cents: u32, raw: &str) -> Result<TpePaymen
     }
     
     // No STX/ETX framing found - try to interpret raw data
-    // Some PAX terminals might send responses without standard framing
-    println!("No STX/ETX framing found, trying raw interpretation");
-    log_to_file("No STX/ETX framing found, trying raw interpretation");
+    // PAX A920 Pro USB sends raw ASCII without STX/ETX framing
+    println!("No STX/ETX framing found, trying PAX raw interpretation");
+    log_to_file("No STX/ETX framing found, trying PAX raw interpretation");
+    
+    // Filter out control bytes to get just the ASCII content
+    let ascii_data: Vec<u8> = data.iter()
+        .filter(|&&b| b >= 0x20 && b <= 0x7E) // Keep only printable ASCII
+        .cloned()
+        .collect();
+    let ascii_str = String::from_utf8_lossy(&ascii_data).to_string();
+    
+    println!("Filtered ASCII: {} ({} chars)", ascii_str, ascii_str.len());
+    log_to_file(&format!("Filtered ASCII: {} ({} chars)", ascii_str, ascii_str.len()));
+    
+    // PAX A920 Pro format (observed): 
+    // Position 1-2: POS number (e.g., "01")
+    // Position 3-4: Function code (e.g., "00")
+    // Position 5-6: Status code ("00" = success, "10" = cancelled, etc.)
+    // Position 7-16: Amount (10 digits)
+    // Position 17-19: Currency (e.g., "978" for EUR, or partial "97")
+    
+    if ascii_str.len() >= 6 && ascii_str.chars().all(|c| c.is_ascii_digit()) {
+        let status_code = &ascii_str[4..6];
+        println!("PAX raw status code: {}", status_code);
+        log_to_file(&format!("PAX raw status code: {}", status_code));
+        
+        if status_code == "00" {
+            // Success!
+            let auth_num = if ascii_str.len() > 19 {
+                Some(ascii_str[19..].trim().to_string())
+            } else {
+                None
+            };
+            
+            return Ok(TpePaymentResponse {
+                success: true,
+                transaction_result: "APPROVED".to_string(),
+                amount_cents,
+                authorization_number: auth_num,
+                error_message: None,
+                raw_response: Some(raw.to_string()),
+            });
+        } else {
+            // Map status codes to user-friendly messages
+            let error_msg = match status_code {
+                "05" => "Paiement refusé par la banque",
+                "10" => "Transaction annulée",
+                "51" => "Fonds insuffisants",
+                "54" => "Carte expirée",
+                "55" => "Code PIN incorrect",
+                "57" => "Transaction non autorisée",
+                "91" => "Émetteur de carte indisponible",
+                _ => "Paiement refusé",
+            };
+            
+            return Ok(TpePaymentResponse {
+                success: false,
+                transaction_result: status_code.to_string(),
+                amount_cents,
+                authorization_number: None,
+                error_message: Some(format!("{} (Code: {})", error_msg, status_code)),
+                raw_response: Some(raw.to_string()),
+            });
+        }
+    }
     
     // Check if data contains only control bytes (ACK, EOT, ENQ, etc.)
     if data.len() <= 3 && data.iter().all(|&b| b == ACK || b == EOT || b == ENQ || b == NAK) {
@@ -880,14 +942,6 @@ fn parse_response(data: &[u8], amount_cents: u32, raw: &str) -> Result<TpePaymen
                 raw_response: Some(raw.to_string()),
             });
         }
-    }
-    
-    // Try to find any recognizable pattern in the raw data
-    // Look for numeric status codes that might be embedded
-    let ascii_str = ascii_repr.to_string();
-    if ascii_str.contains("00") && ascii_str.len() >= 6 {
-        println!("Found '00' in raw data, might be success");
-        log_to_file("Found '00' in raw data, possible success indication");
     }
     
     // Return diagnostic info for the user
