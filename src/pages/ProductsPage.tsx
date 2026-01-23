@@ -98,8 +98,8 @@ export const ProductsPage: React.FC = () => {
             alert("Veuillez entrer un nom de produit");
             return;
         }
-        if (Number.isNaN(productForm.price) || productForm.price <= 0) {
-            alert("Le prix doit être supérieur à 0");
+        if (Number.isNaN(productForm.price) || productForm.price < 0) {
+            alert("Le prix ne peut pas être négatif");
             return;
         }
 
