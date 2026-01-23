@@ -27,6 +27,7 @@ interface TransactionState {
     getTodayTotal: () => number;
     getSessionTotal: () => number;
     clearSessionTransactions: () => void;
+    clearAllTransactions: () => void;
 }
 
 export const useTransactionStore = create<TransactionState>()(
@@ -98,6 +99,14 @@ export const useTransactionStore = create<TransactionState>()(
 
             clearSessionTransactions: () => {
                 set({ currentSessionTransactions: [] });
+            },
+
+            clearAllTransactions: () => {
+                set({
+                    transactions: [],
+                    currentSessionTransactions: [],
+                    lastTransactionId: 0
+                });
             },
         }),
         {

@@ -462,3 +462,10 @@ export const deleteUser = async (id: number): Promise<ApiResponse> => {
     });
     return response.json();
 };
+
+export const clearAllData = async (): Promise<ApiResponse> => {
+    const response = await fetch(`${getApiUrl()}/api/admin/clear-data`, {
+        method: 'POST',
+    });
+    return response.json();
+};

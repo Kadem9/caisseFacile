@@ -26,6 +26,7 @@ interface ClosureState {
     openClosure: (input: CashClosureInput) => CashClosure;
     closeClosure: (input: CashClosureCloseInput) => CashClosure | null;
     updateExpectedAmount: (amount: number) => void;
+    clearAllClosures: () => void;
 
     // Getters
     getCurrentClosure: () => CashClosure | null;
@@ -101,6 +102,14 @@ export const useClosureStore = create<ClosureState>()(
                     closures: closures.map((c) =>
                         c.id === currentClosure.id ? updatedClosure : c
                     ),
+                });
+            },
+
+            clearAllClosures: () => {
+                set({
+                    closures: [],
+                    currentClosure: null,
+                    lastClosureId: 0
                 });
             },
 

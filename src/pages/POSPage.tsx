@@ -2,7 +2,7 @@
 // POS Page - Main Cash Register Interface
 // ===================================
 
-import React, { useState, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, PackageIcon, ChartIcon, SettingsIcon, LogoutIcon, AlertIcon, HamburgerIcon, ShoppingCartIcon, TrashIcon, PlusIcon, MinusIcon, CardIcon } from '../components/ui';
 import { PaymentModal, MenuCompositionModal } from '../components/pos';
@@ -30,6 +30,7 @@ export const POSPage: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'products' | 'menus'>('products');
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [selectedMenu, setSelectedMenu] = useState<Menu | null>(null);
+    const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }));
 
     // Use useMemo to ensure filteredProducts updates when activeCategory or products change
     const filteredProducts = useMemo(() => {
@@ -55,7 +56,14 @@ export const POSPage: React.FC = () => {
         }
     }, []);
 
-    // Auto sync is now handled globally in App.tsx
+
+    // Clock
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setCurrentTime(new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }));
+        }, 1000); // Update every second to be accurate, though we only show minutes
+        return () => clearInterval(timer);
+    }, []);
 
     const handleProductClick = useCallback((product: Product) => {
         // Check if product is in stock
@@ -290,6 +298,19 @@ export const POSPage: React.FC = () => {
                     <div className="pos-header__session-info">
                         <span className="label">Session :</span>
                         <span className="amount">{formatPrice(sessionTotal)}</span>
+                    </div>
+                    {/* Clock */}
+                    <div className="pos-header__clock" style={{
+                        marginLeft: '15px',
+                        fontSize: '1.2rem',
+                        fontWeight: 'bold',
+                        color: 'var(--text-primary)',
+                        padding: '4px 12px',
+                        background: 'rgba(255,255,255,0.5)',
+                        borderRadius: '6px',
+                        border: '1px solid rgba(0,0,0,0.05)'
+                    }}>
+                        {currentTime}
                     </div>
                     {lowStockCount > 0 && (
                         <button

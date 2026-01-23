@@ -1685,6 +1685,36 @@ app.get('/dashboard', (req, res) => {
 });
 
 // ===================================
+// Admin Actions
+// ===================================
+
+app.post('/api/admin/clear-data', (req, res) => {
+    try {
+        console.log('[Admin] Clearing all sales data...');
+
+        // Execute in transaction to ensure all or nothing
+        const clearData = db.transaction(() => {
+            // Delete all transactions
+            db.prepare('DELETE FROM transactions').run();
+
+            // Delete all closures
+            db.prepare('DELETE FROM closures').run();
+
+            // Delete sync logs related to these entities
+            db.prepare("DELETE FROM sync_log WHERE entity_type IN ('transaction', 'closure')").run();
+        });
+
+        clearData();
+
+        console.log('[Admin] All sales data cleared successfully');
+        res.json({ success: true, message: 'Données de vente supprimées avec succès' });
+    } catch (error) {
+        console.error('Clear data error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ===================================
 // Start Server
 // ===================================
 

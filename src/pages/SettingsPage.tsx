@@ -24,7 +24,10 @@ import {
     setApiUrl as setApiUrlService,
     DEFAULT_API_URL,
     checkHealth,
+    clearAllData,
 } from '../services/api';
+import { useTransactionStore } from '../stores/transactionStore';
+import { useClosureStore } from '../stores/closureStore';
 
 interface SerialPortInfo {
     name: string;
@@ -113,6 +116,12 @@ export const SettingsPage: React.FC = () => {
     });
     const [tpeTestResult, setTpeTestResult] = useState<{ deviceIndex: number; type: 'success' | 'error'; message: string } | null>(null);
     const [isTpeTesting, setIsTpeTesting] = useState<number | null>(null);
+
+    // clear Data State
+    const [showClearDataModal, setShowClearDataModal] = useState(false);
+    const [clearDataPin, setClearDataPin] = useState('');
+    const [clearDataError, setClearDataError] = useState<string | null>(null);
+    const [isClearing, setIsClearing] = useState(false);
 
     // Load configuration on mount
     useEffect(() => {
@@ -323,6 +332,36 @@ export const SettingsPage: React.FC = () => {
         }
     }, []);
 
+    const handleClearData = async () => {
+        if (clearDataPin !== '1508') {
+            setClearDataError('Code PIN incorrect');
+            return;
+        }
+
+        setIsClearing(true);
+        setClearDataError(null);
+
+        try {
+            // 1. Clear Backend
+            const result = await clearAllData();
+            if (!result.success) throw new Error(result.error);
+
+            // 2. Clear Local Stores
+            useTransactionStore.getState().clearAllTransactions();
+            useClosureStore.getState().clearAllClosures();
+
+            // 3. Success
+            setTestResult({ type: 'success', message: 'Toutes les données de vente ont été supprimées.' });
+            setShowClearDataModal(false);
+            setClearDataPin('');
+        } catch (err) {
+            console.error('Failed to clear data:', err);
+            setClearDataError(String(err));
+        } finally {
+            setIsClearing(false);
+        }
+    };
+
     return (
         <div className="settings-page">
             {/* Header */}
@@ -367,7 +406,45 @@ export const SettingsPage: React.FC = () => {
                 </nav>
 
                 {/* Content */}
+                {/* Content */}
                 <div className="settings-content">
+                    {/* Clear Data Modal */}
+                    {showClearDataModal && (
+                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                            <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full">
+                                <h3 className="text-xl font-bold text-red-600 mb-4">⚠️ Attention Danger</h3>
+                                <p className="mb-4 text-gray-700">
+                                    Vous êtes sur le point de supprimer <strong>toutes les ventes et l'historique</strong>.
+                                    Cette action est irréversible.
+                                </p>
+                                <div className="mb-4">
+                                    <label className="block text-sm font-medium mb-1">Code de sécurité</label>
+                                    <input
+                                        type="password"
+                                        className="w-full border rounded p-2 text-center text-lg tracking-widest"
+                                        value={clearDataPin}
+                                        onChange={(e) => setClearDataPin(e.target.value)}
+                                        placeholder="Code PIN"
+                                        maxLength={4}
+                                    />
+                                    {clearDataError && <p className="text-red-500 text-xs mt-1">{clearDataError}</p>}
+                                </div>
+                                <div className="flex justify-end gap-2">
+                                    <Button variant="ghost" onClick={() => setShowClearDataModal(false)}>Annuler</Button>
+                                    <Button
+                                        variant="secondary"
+                                        onClick={handleClearData}
+                                        disabled={isClearing}
+                                        style={{ backgroundColor: '#dc2626', color: 'white' }}
+                                    >
+                                        {isClearing ? 'Suppression...' : 'CONFIRMER SUPPRESSION'}
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Test Result Alert */}
                     {/* Test Result Alert */}
                     {testResult && (
                         <div className={`settings-alert settings-alert--${testResult.type}`}>
@@ -669,17 +746,27 @@ export const SettingsPage: React.FC = () => {
                                     </div>
                                 )}
 
-                                <div className="settings-form__info">
-                                    <p>
-                                        <WifiIcon size={16} className="inline mr-2" />
-                                        Le serveur backend permet de synchroniser les données
-                                        vers un dashboard distant. Assurez-vous que le serveur est
-                                        accessible à l'adresse indiquée.
-                                    </p>
-                                    <p style={{ marginTop: '10px', fontSize: '0.85em', color: 'var(--text-muted)' }}>
-                                        <LightbulbIcon size={16} className="inline mr-1" />
-                                        Si vous changez l'URL, il est recommandé de redémarrer l'application.
-                                    </p>
+                                <p style={{ marginTop: '10px', fontSize: '0.85em', color: 'var(--text-muted)' }}>
+                                    <LightbulbIcon size={16} className="inline mr-1" />
+                                    Si vous changez l'URL, il est recommandé de redémarrer l'application.
+                                </p>
+                            </div>
+
+                            {/* Danger Zone */}
+                            <div className="settings-danger-zone mt-8 pt-8 border-t border-red-200">
+                                <h3 className="text-red-600 font-bold mb-2">Zone de Danger</h3>
+                                <div className="flex items-center justify-between p-4 bg-red-50 rounded-lg border border-red-100">
+                                    <div>
+                                        <p className="font-medium text-red-900">Vider les données de vente</p>
+                                        <p className="text-sm text-red-700">Supprime tout l'historique des commandes et le chiffre d'affaires.</p>
+                                    </div>
+                                    <Button
+                                        variant="secondary"
+                                        onClick={() => setShowClearDataModal(true)}
+                                        style={{ backgroundColor: '#dc2626', color: 'white' }}
+                                    >
+                                        VIDER LES DONNEES
+                                    </Button>
                                 </div>
                             </div>
                         </div>
@@ -923,8 +1010,8 @@ export const SettingsPage: React.FC = () => {
                         </div>
                     )}
                 </div>
-            </main>
-        </div>
+            </main >
+        </div >
     );
 };
 
