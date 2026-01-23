@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuthStore, useSyncStore } from '../stores';
 // removed direct api imports
 import { Button, PlusIcon, EditIcon, TrashIcon, UserIcon, CheckIcon, XIcon, SearchIcon, ArrowLeftIcon } from '../components/ui';

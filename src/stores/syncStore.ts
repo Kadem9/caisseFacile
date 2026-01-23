@@ -202,7 +202,7 @@ export const useSyncStore = create<SyncState>()(
                     // getSyncDiff now returns { ts, products, menus } directly
                     const lastSync = lastSyncAt ? lastSyncAt.toISOString() : '1970-01-01T00:00:00.000Z';
                     const result = await getSyncDiff(lastSync);
-                    const { ts, products, menus, users } = result;
+                    const { ts, products, menus } = result;
 
                     const imageCache = useImageCacheStore.getState();
 

@@ -4,7 +4,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { User, UserCreateInput, UserRole } from '../types';
+import type { User, UserCreateInput } from '../types';
 import { useSyncStore } from './syncStore';
 
 interface AuthState {
