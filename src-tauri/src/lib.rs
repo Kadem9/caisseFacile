@@ -3,6 +3,7 @@
 mod hardware;
 mod tpe;
 mod http_proxy;
+mod protocols;
 
 use hardware::{
     list_serial_ports,

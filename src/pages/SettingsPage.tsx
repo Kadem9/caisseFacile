@@ -52,11 +52,17 @@ interface SystemPrinterInfo {
 type ConnectionMode = 'serial' | 'driver';
 
 interface TpeDeviceConfig {
-    name: string;        // User-friendly name (e.g., "Ingenico Move/5000")
-    port: string;        // COM port (e.g., "COM5")
-    baudRate: number;    // Baud rate (e.g., 9600)
-    posNumber: string;   // POS number for Concert protocol (01-99)
-    protocolVersion: 2 | 3; // 2 = Concert V2 (8 digits), 3 = Concert V3 (10 digits)
+    name: string;        // User-friendly name
+    port: string;        // COM port or IP:port
+    baudRate: number;    // Baud rate for serial
+    posNumber: string;   // POS number (01-99)
+    protocolVersion: 2 | 3 | 4 | 5 | 6 | 7; // Protocol type
+    // 2 = Concert V2 (Binaire)
+    // 3 = Concert V3 (TLV/Caisse-AP) 
+    // 4 = Concert V3 (Binaire 19 chars)
+    // 5 = SmilePay
+    // 6 = Yavin Local API
+    // 7 = Yavin Cloud API
 }
 
 interface TpeConfig {
@@ -66,8 +72,8 @@ interface TpeConfig {
 
 const DEFAULT_TPE_CONFIG: TpeConfig = {
     devices: [
-        { name: 'Indigo Move/500', port: 'COM5', baudRate: 9600, posNumber: '01', protocolVersion: 2 },
-        { name: 'PAX A920 Pro', port: 'COM6', baudRate: 9600, posNumber: '01', protocolVersion: 3 },
+        { name: 'Indigo Move/500', port: 'COM5', baudRate: 9600, posNumber: '01', protocolVersion: 3 },
+        { name: 'SmilePay', port: 'COM6', baudRate: 9600, posNumber: '01', protocolVersion: 5 },
     ],
     activeDeviceIndex: 0,
 };
@@ -889,13 +895,17 @@ export const SettingsPage: React.FC = () => {
                                             <select
                                                 className="settings-form__select"
                                                 value={tpeConfig.devices[0].protocolVersion}
-                                                onChange={(e) => updateTpeDevice(0, { protocolVersion: Number(e.target.value) as 2 | 3 })}
+                                                onChange={(e) => updateTpeDevice(0, { protocolVersion: Number(e.target.value) as 2 | 3 | 4 | 5 | 6 | 7 })}
                                             >
-                                                <option value={2}>V2 (8 chiffres - Indigo/Ancien)</option>
-                                                <option value={3}>V3 (10 chiffres - Moderne)</option>
+                                                <option value={2}>Concert V2 (Binaire - Ancien)</option>
+                                                <option value={3}>Concert V3 TLV (Caisse-AP)</option>
+                                                <option value={4}>Concert V3 Binaire (19 chars)</option>
+                                                <option value={5}>SmilePay</option>
+                                                <option value={6}>Yavin (Local API)</option>
+                                                <option value={7}>Yavin (Cloud API)</option>
                                             </select>
                                             <p className="settings-form__help">
-                                                Indigo Move/500 = V2 | PAX/Ingenico récents = V3
+                                                Indigo/SmilePay = V3 TLV | Yavin = API HTTP
                                             </p>
                                         </div>
                                     </div>
@@ -999,17 +1009,21 @@ export const SettingsPage: React.FC = () => {
                                     </div>
                                     <div className="settings-form__row">
                                         <div className="settings-form__group">
-                                            <label className="settings-form__label">Protocole Concert</label>
+                                            <label className="settings-form__label">Protocole</label>
                                             <select
                                                 className="settings-form__select"
                                                 value={tpeConfig.devices[1].protocolVersion}
-                                                onChange={(e) => updateTpeDevice(1, { protocolVersion: Number(e.target.value) as 2 | 3 })}
+                                                onChange={(e) => updateTpeDevice(1, { protocolVersion: Number(e.target.value) as 2 | 3 | 4 | 5 | 6 | 7 })}
                                             >
-                                                <option value={2}>V2 (8 chiffres - Indigo/Ancien)</option>
-                                                <option value={3}>V3 (10 chiffres - Moderne)</option>
+                                                <option value={2}>Concert V2 (Binaire - Ancien)</option>
+                                                <option value={3}>Concert V3 TLV (Caisse-AP)</option>
+                                                <option value={4}>Concert V3 Binaire (19 chars)</option>
+                                                <option value={5}>SmilePay</option>
+                                                <option value={6}>Yavin (Local API)</option>
+                                                <option value={7}>Yavin (Cloud API)</option>
                                             </select>
                                             <p className="settings-form__help">
-                                                Indigo Move/500 = V2 | PAX/Ingenico récents = V3
+                                                Indigo/SmilePay = V3 TLV | Yavin = API HTTP
                                             </p>
                                         </div>
                                     </div>

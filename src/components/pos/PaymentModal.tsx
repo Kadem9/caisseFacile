@@ -34,7 +34,7 @@ interface TpeDeviceConfig {
     port: string;
     baudRate: number;
     posNumber: string;
-    protocolVersion: 2 | 3;
+    protocolVersion: 2 | 3 | 4 | 5 | 6 | 7;
 }
 
 interface TpeConfig {
