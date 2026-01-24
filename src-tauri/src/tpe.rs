@@ -341,30 +341,35 @@ fn build_payment_message(amount_cents: u32, pos_number: &str, protocol_version: 
     } else {
         // Concert V3 TLV format (same as Caisse-AP IP)
         // Format: TAG(2 letters) + LENGTH(3 digits) + VALUE
+        // Order matters! Must match Caisse-AP specification
         fn tlv(tag: &str, value: &str) -> String {
             format!("{}{:03}{}", tag, value.len(), value)
         }
         
         let mut msg = String::new();
         
-        // CZ = Protocol version (3.2)
+        // CZ = Protocol version (MUST be first!) - "0320" for v3.2
         msg.push_str(&tlv("CZ", "0320"));
         
-        // CA = POS number
+        // CA = POS number (caisse number)
         msg.push_str(&tlv("CA", &pos_num));
         
-        // CE = Currency (978 = EUR)
+        // CE = Currency ISO code (978 = EUR)
         msg.push_str(&tlv("CE", "978"));
         
-        // BA = Answer mode: "0" = answer at end of transaction
-        msg.push_str(&tlv("BA", "0"));
-        
-        // CD = Transaction type: "0" = debit
+        // CD = Transaction type: "0" = debit payment
         msg.push_str(&tlv("CD", "0"));
         
-        // CB = Amount in cents (12 digits)
+        // CB = Amount in cents (12 digits padded)
         let amount_str = format!("{:012}", amount_cents);
         msg.push_str(&tlv("CB", &amount_str));
+        
+        // TI = Transaction ID (6 digits numeric) - MAY BE REQUIRED!
+        let tx_id = format!("{:06}", std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() % 1000000);
+        msg.push_str(&tlv("TI", &tx_id));
         
         msg
     };
