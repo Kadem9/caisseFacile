@@ -56,6 +56,7 @@ interface TpeDeviceConfig {
     port: string;        // COM port (e.g., "COM5")
     baudRate: number;    // Baud rate (e.g., 9600)
     posNumber: string;   // POS number for Concert protocol (01-99)
+    protocolVersion: 2 | 3; // 2 = Concert V2 (8 digits), 3 = Concert V3 (10 digits)
 }
 
 interface TpeConfig {
@@ -65,8 +66,8 @@ interface TpeConfig {
 
 const DEFAULT_TPE_CONFIG: TpeConfig = {
     devices: [
-        { name: 'Ingenico Move/5000', port: 'COM5', baudRate: 9600, posNumber: '01' },
-        { name: 'PAX A920 Pro', port: 'COM6', baudRate: 9600, posNumber: '01' },
+        { name: 'Indigo Move/500', port: 'COM5', baudRate: 9600, posNumber: '01', protocolVersion: 2 },
+        { name: 'PAX A920 Pro', port: 'COM6', baudRate: 9600, posNumber: '01', protocolVersion: 3 },
     ],
     activeDeviceIndex: 0,
 };
@@ -296,6 +297,7 @@ export const SettingsPage: React.FC = () => {
                 portName: device.port,
                 baudRate: device.baudRate,
                 posNumber: device.posNumber,
+                protocolVersion: device.protocolVersion,
                 amountCents: 1, // 1 centime test
             });
             setTpeTestResult({
@@ -881,6 +883,22 @@ export const SettingsPage: React.FC = () => {
                                             />
                                         </div>
                                     </div>
+                                    <div className="settings-form__row">
+                                        <div className="settings-form__group">
+                                            <label className="settings-form__label">Protocole Concert</label>
+                                            <select
+                                                className="settings-form__select"
+                                                value={tpeConfig.devices[0].protocolVersion}
+                                                onChange={(e) => updateTpeDevice(0, { protocolVersion: Number(e.target.value) as 2 | 3 })}
+                                            >
+                                                <option value={2}>V2 (8 chiffres - Indigo/Ancien)</option>
+                                                <option value={3}>V3 (10 chiffres - Moderne)</option>
+                                            </select>
+                                            <p className="settings-form__help">
+                                                Indigo Move/500 = V2 | PAX/Ingenico récents = V3
+                                            </p>
+                                        </div>
+                                    </div>
                                     <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
                                         <Button onClick={() => handleTestTpe(0)} disabled={isTpeTesting === 0}>
                                             {isTpeTesting === 0 ? (
@@ -977,6 +995,22 @@ export const SettingsPage: React.FC = () => {
                                                 placeholder="01"
                                                 maxLength={2}
                                             />
+                                        </div>
+                                    </div>
+                                    <div className="settings-form__row">
+                                        <div className="settings-form__group">
+                                            <label className="settings-form__label">Protocole Concert</label>
+                                            <select
+                                                className="settings-form__select"
+                                                value={tpeConfig.devices[1].protocolVersion}
+                                                onChange={(e) => updateTpeDevice(1, { protocolVersion: Number(e.target.value) as 2 | 3 })}
+                                            >
+                                                <option value={2}>V2 (8 chiffres - Indigo/Ancien)</option>
+                                                <option value={3}>V3 (10 chiffres - Moderne)</option>
+                                            </select>
+                                            <p className="settings-form__help">
+                                                Indigo Move/500 = V2 | PAX/Ingenico récents = V3
+                                            </p>
                                         </div>
                                     </div>
                                     <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>

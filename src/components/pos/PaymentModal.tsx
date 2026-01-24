@@ -34,6 +34,7 @@ interface TpeDeviceConfig {
     port: string;
     baudRate: number;
     posNumber: string;
+    protocolVersion: 2 | 3;
 }
 
 interface TpeConfig {
@@ -168,6 +169,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 portName: activeTpe.port,
                 baudRate: activeTpe.baudRate,
                 posNumber: activeTpe.posNumber,
+                protocolVersion: activeTpe.protocolVersion,
                 amountCents,
             });
 

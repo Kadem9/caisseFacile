@@ -25,6 +25,7 @@ pub struct TpeConfig {
     pub port: String, // Can be "COM3" or "192.168.1.50:8888"
     pub baud_rate: u32,
     pub pos_number: String,
+    pub protocol_version: u8, // 2 = Concert V2 (8 digits), 3 = Concert V3 (10 digits)
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -229,7 +230,7 @@ pub async fn test_tpe_connection(port_name: String, baud_rate: u32) -> TpeTestRe
     }
 }
 
-fn build_payment_message(amount_cents: u32, pos_number: &str) -> Vec<u8> {
+fn build_payment_message(amount_cents: u32, pos_number: &str, protocol_version: u8) -> Vec<u8> {
     let tx_type = "01"; // Payment
     
     // Safely handle pos_number to be exactly 2 digits
@@ -241,14 +242,19 @@ fn build_payment_message(amount_cents: u32, pos_number: &str) -> Vec<u8> {
         "01".to_string() 
     };
     
-    // Concert V3: 10 digits for amount
-    let amount = format!("{:010}", amount_cents);
+    // Concert V2 = 8 digits, Concert V3 = 10 digits
+    let amount = if protocol_version == 2 {
+        format!("{:08}", amount_cents) // Concert V2 (Indigo Move/500)
+    } else {
+        format!("{:010}", amount_cents) // Concert V3 (Modern terminals)
+    };
     
     // Currency code: 978 = EUR
     let currency = "978"; 
     
     let data = format!("{}{}{}{}", tx_type, pos_num, amount, currency);
-    println!("Building Concert message Data (length {}): {}", data.len(), data);
+    println!("Building Concert V{} message Data (length {}): {}", protocol_version, data.len(), data);
+    log_to_file(&format!("Concert V{} message: {}", protocol_version, data));
     
     let mut lrc_input: Vec<u8> = data.as_bytes().to_vec();
     lrc_input.push(ETX);
@@ -341,6 +347,7 @@ pub async fn send_tpe_payment(
     port_name: String,
     baud_rate: u32,
     pos_number: String,
+    protocol_version: u8,
     amount_cents: u32,
 ) -> Result<TpePaymentResponse, String> {
     // Reset cancellation flag at start of new transaction
@@ -587,7 +594,7 @@ pub async fn send_tpe_payment(
         }
         
         // Step 2: Send Message
-        let message = build_payment_message(amount_cents, &pos_number);
+        let message = build_payment_message(amount_cents, &pos_number, protocol_version);
         println!("Sending standard message: {}", bytes_to_hex(&message));
         stream.write_all(&message).map_err(|e| format!("Send failed: {}", e))?;
         let _ = stream.flush();
