@@ -20,6 +20,8 @@ use tpe::{
     test_tpe_connection,
     send_tpe_payment,
     cancel_tpe_transaction,
+    get_tpe_logs,
+    clear_tpe_logs,
 };
 
 use http_proxy::http_request;
@@ -67,6 +69,8 @@ pub fn run() {
             test_tpe_connection,
             send_tpe_payment,
             cancel_tpe_transaction,
+            get_tpe_logs,
+            clear_tpe_logs,
             quit_app,
             // HTTP Proxy for Windows compatibility
             http_request,

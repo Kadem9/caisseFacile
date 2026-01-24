@@ -118,18 +118,107 @@ fn connect_serial(port_name: &str, baud_rate: u32) -> Result<Box<dyn TpeStream>,
 
 
 // ===================================
-// Logging Helper
+// Logging Helper - Robust TPE Debug Logs
 // ===================================
 
-fn log_to_file(message: &str) {
-    if let Ok(mut file) = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open("C:\\tpe_debug.log")
-    {
-        let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
-        let _ = writeln!(file, "[{}] {}", timestamp, message);
+use std::sync::Mutex;
+use once_cell::sync::Lazy;
+
+// In-memory log buffer (thread-safe)
+static TPE_LOG_BUFFER: Lazy<Mutex<Vec<String>>> = Lazy::new(|| Mutex::new(Vec::new()));
+
+/// Get the TPE log file path in user's Documents folder
+fn get_log_file_path() -> Option<std::path::PathBuf> {
+    // Try multiple locations for cross-platform compatibility
+    if let Some(docs) = dirs::document_dir() {
+        return Some(docs.join("ma-caisse-tpe-debug.log"));
     }
+    if let Some(home) = dirs::home_dir() {
+        return Some(home.join("ma-caisse-tpe-debug.log"));
+    }
+    // Fallback to current directory
+    Some(std::path::PathBuf::from("ma-caisse-tpe-debug.log"))
+}
+
+fn log_to_file(message: &str) {
+    let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
+    let log_entry = format!("[{}] {}", timestamp, message);
+    
+    // Always log to memory buffer
+    if let Ok(mut buffer) = TPE_LOG_BUFFER.lock() {
+        buffer.push(log_entry.clone());
+        // Keep only last 500 entries to avoid memory issues
+        if buffer.len() > 500 {
+            buffer.remove(0);
+        }
+    }
+    
+    // Also try to log to file
+    if let Some(log_path) = get_log_file_path() {
+        if let Ok(mut file) = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_path)
+        {
+            let _ = writeln!(file, "{}", log_entry);
+        }
+    }
+    
+    // Also print to console for dev mode
+    println!("[TPE] {}", message);
+}
+
+/// Tauri command to get all TPE logs
+#[tauri::command]
+pub fn get_tpe_logs() -> Result<String, String> {
+    let mut result = String::new();
+    
+    // Add header with log file location
+    if let Some(log_path) = get_log_file_path() {
+        result.push_str(&format!("=== TPE Debug Logs ===\n"));
+        result.push_str(&format!("Log file: {}\n", log_path.display()));
+        result.push_str(&format!("Generated: {}\n", chrono::Local::now().format("%Y-%m-%d %H:%M:%S")));
+        result.push_str("===========================\n\n");
+    }
+    
+    // First try to read from file (more complete)
+    if let Some(log_path) = get_log_file_path() {
+        if let Ok(contents) = std::fs::read_to_string(&log_path) {
+            result.push_str(&contents);
+            return Ok(result);
+        }
+    }
+    
+    // Fallback to memory buffer
+    if let Ok(buffer) = TPE_LOG_BUFFER.lock() {
+        for entry in buffer.iter() {
+            result.push_str(entry);
+            result.push('\n');
+        }
+    }
+    
+    if result.trim().is_empty() {
+        result.push_str("Aucun log TPE disponible. Effectuez un test de connexion ou paiement d'abord.\n");
+    }
+    
+    Ok(result)
+}
+
+/// Tauri command to clear TPE logs
+#[tauri::command]
+pub fn clear_tpe_logs() -> Result<String, String> {
+    // Clear memory buffer
+    if let Ok(mut buffer) = TPE_LOG_BUFFER.lock() {
+        buffer.clear();
+    }
+    
+    // Clear log file
+    if let Some(log_path) = get_log_file_path() {
+        let _ = std::fs::remove_file(&log_path);
+    }
+    
+    log_to_file("=== Logs cleared ===");
+    Ok("Logs cleared".to_string())
 }
 
 fn bytes_to_hex(data: &[u8]) -> String {

@@ -36,6 +36,9 @@ chrono = "0.4"
 tokio = { version = "1", features = ["full"] }
 # HTTP client for Rust-side requests (Windows compatibility)
 reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+# TPE logging utilities
+once_cell = "1.19"
+dirs = "5.0"
 
 [target.x86_64-apple-darwin.dependencies]
 tauri-plugin-log = "2.8.0"

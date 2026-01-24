@@ -1033,6 +1033,58 @@ export const SettingsPage: React.FC = () => {
                                     )}
                                 </div>
 
+                                {/* TPE Logs Section */}
+                                <div className="settings-form__section" style={{ marginTop: '24px', paddingTop: '24px', borderTop: '1px solid var(--border-color)' }}>
+                                    <h4 className="settings-form__section-title">📋 Logs TPE (Debug)</h4>
+                                    <p className="settings-form__help" style={{ marginBottom: '12px' }}>
+                                        En cas de problème avec le TPE, téléchargez les logs pour les analyser ou les envoyer au support.
+                                    </p>
+                                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                                        <Button
+                                            variant="secondary"
+                                            onClick={async () => {
+                                                try {
+                                                    const logs = await invoke<string>('get_tpe_logs');
+                                                    // Create downloadable file
+                                                    const blob = new Blob([logs], { type: 'text/plain;charset=utf-8' });
+                                                    const url = URL.createObjectURL(blob);
+                                                    const a = document.createElement('a');
+                                                    a.href = url;
+                                                    a.download = `tpe-debug-${new Date().toISOString().slice(0, 10)}.txt`;
+                                                    document.body.appendChild(a);
+                                                    a.click();
+                                                    document.body.removeChild(a);
+                                                    URL.revokeObjectURL(url);
+                                                    setTpeTestResult({ deviceIndex: -1, type: 'success', message: 'Logs téléchargés !' });
+                                                } catch (err) {
+                                                    setTpeTestResult({ deviceIndex: -1, type: 'error', message: String(err) });
+                                                }
+                                            }}
+                                        >
+                                            📥 Télécharger les logs TPE
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            onClick={async () => {
+                                                try {
+                                                    await invoke('clear_tpe_logs');
+                                                    setTpeTestResult({ deviceIndex: -1, type: 'success', message: 'Logs effacés !' });
+                                                } catch (err) {
+                                                    setTpeTestResult({ deviceIndex: -1, type: 'error', message: String(err) });
+                                                }
+                                            }}
+                                        >
+                                            🗑️ Effacer les logs
+                                        </Button>
+                                    </div>
+                                    {tpeTestResult && tpeTestResult.deviceIndex === -1 && (
+                                        <div className={`settings-alert settings-alert--${tpeTestResult.type}`} style={{ marginTop: '10px' }}>
+                                            {tpeTestResult.type === 'success' ? <CheckIcon size={16} /> : <XIcon size={16} />}
+                                            <span style={{ marginLeft: '8px' }}>{tpeTestResult.message}</span>
+                                        </div>
+                                    )}
+                                </div>
+
                                 <div className="settings-form__info" style={{ marginTop: '24px' }}>
                                     <p>
                                         <LightbulbIcon size={16} className="inline mr-2" />
