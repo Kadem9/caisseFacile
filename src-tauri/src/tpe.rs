@@ -829,39 +829,68 @@ fn parse_response(data: &[u8], amount_cents: u32, raw: &str) -> Result<TpePaymen
             let body_str = String::from_utf8_lossy(body);
             log_to_file(&format!("Response body: {} ({}chars)", body_str, body_str.len()));
             
-            // Concert response format:
-            // V2: TYPE(1) + RESULT(2) + POS(2) + AMOUNT(8) + ...
-            // V3: TYPE(2) + RESULT(2) + POS(2) + AMOUNT(10) + ...
-            // 
-            // Result codes:
-            // "00" = Success (payment accepted)
-            // "01" = Cancelled by operator
-            // "02" = Transaction refused by card
-            // "03" = Error communication
-            // "10" = Fonction impossible (function not available)
-            // etc.
+            // Check if this is a TLV response (contains AE tag)
+            if body_str.contains("AE") {
+                // TLV format response - parse AE and AF tags
+                // Format: AE002XX where XX is the status code
+                // AE values: 00=pending, 01=not performed, 10=performed (success!)
+                // AF values: 09=format error, 11=abandoned, etc.
+                
+                let ae_code = extract_tlv_value(&body_str, "AE");
+                let af_code = extract_tlv_value(&body_str, "AF");
+                
+                log_to_file(&format!("TLV Response - AE='{}', AF='{}'", ae_code, af_code));
+                
+                // AE=10 means SUCCESS in Caisse-AP!
+                // AE=01 means NOT PERFORMED (failure)
+                if ae_code == "10" {
+                    return Ok(TpePaymentResponse {
+                        success: true,
+                        transaction_result: "10".to_string(),
+                        amount_cents,
+                        authorization_number: None,
+                        error_message: None,
+                        raw_response: Some(raw.to_string()),
+                    });
+                } else {
+                    // Transaction failed - map AF error codes
+                    let error_msg = match af_code.as_str() {
+                        "01" => "Transaction annulée",
+                        "02" => "Carte refusée",
+                        "03" => "Erreur communication",
+                        "09" => "Erreur format message (protocole incompatible)",
+                        "10" => "Fonction impossible",
+                        "11" => "Transaction abandonnée",
+                        _ => "Transaction non effectuée",
+                    };
+                    
+                    return Ok(TpePaymentResponse {
+                        success: false,
+                        transaction_result: format!("AE={},AF={}", ae_code, af_code),
+                        amount_cents,
+                        authorization_number: None,
+                        error_message: Some(format!("{} (AE={}, AF={})", error_msg, ae_code, af_code)),
+                        raw_response: Some(raw.to_string()),
+                    });
+                }
+            }
             
-            // Try to extract result code (usually at position 1 or 2)
-            // The result code is 2 chars after the type
+            // Binary format response (V2/V3)
+            // V2: TYPE(1) + RESULT(2) + ...
+            // V3: TYPE(2) + RESULT(2) + ...
             let result_code = if body_str.len() >= 3 {
-                // Try V2 format: TYPE(1) + RESULT(2)
                 let v2_code = &body_str[1..3.min(body_str.len())];
-                // Try V3 format: TYPE(2) + RESULT(2)
                 let v3_code = if body_str.len() >= 4 { &body_str[2..4] } else { "" };
                 
-                log_to_file(&format!("V2 result code position: '{}', V3 position: '{}'", v2_code, v3_code));
+                log_to_file(&format!("Binary Response - V2='{}', V3='{}'", v2_code, v3_code));
                 
-                // Check which one looks like a valid response code
-                if v2_code == "00" {
-                    "00".to_string()
-                } else if v3_code == "00" {
+                if v2_code == "00" || v3_code == "00" {
                     "00".to_string()
                 } else if v2_code == "10" || v3_code == "10" {
                     "10".to_string()
                 } else if v2_code == "01" || v3_code == "01" {
                     "01".to_string()
                 } else {
-                    // Return whichever looks like a 2-digit code
                     v2_code.to_string()
                 }
             } else {
@@ -870,7 +899,6 @@ fn parse_response(data: &[u8], amount_cents: u32, raw: &str) -> Result<TpePaymen
             
             log_to_file(&format!("Parsed result code: {}", result_code));
             
-            // Success only if result code is "00"
             if result_code == "00" {
                 return Ok(TpePaymentResponse {
                     success: true,
@@ -881,13 +909,12 @@ fn parse_response(data: &[u8], amount_cents: u32, raw: &str) -> Result<TpePaymen
                     raw_response: Some(raw.to_string()),
                 });
             } else {
-                // Map error codes to messages
                 let error_msg = match result_code.as_str() {
-                    "01" => "Transaction annulée par l'opérateur",
-                    "02" => "Transaction refusée par la carte",
-                    "03" => "Erreur de communication",
-                    "10" => "Fonction impossible (vérifiez la config TPE)",
-                    "11" => "Timeout - pas de réponse",
+                    "01" => "Transaction annulée",
+                    "02" => "Carte refusée",
+                    "03" => "Erreur communication",
+                    "10" => "Fonction impossible",
+                    "11" => "Timeout",
                     _ => "Transaction échouée",
                 };
                 
@@ -903,7 +930,6 @@ fn parse_response(data: &[u8], amount_cents: u32, raw: &str) -> Result<TpePaymen
         }
     }
     
-    // No STX/ETX framing found
     log_to_file("No valid framing found in response");
     Ok(TpePaymentResponse {
         success: false,
@@ -913,6 +939,22 @@ fn parse_response(data: &[u8], amount_cents: u32, raw: &str) -> Result<TpePaymen
         error_message: Some(format!("Format de réponse invalide: {}", raw)),
         raw_response: Some(raw.to_string()),
     })
+}
+
+/// Extract value from TLV format: TAG(2) + LENGTH(3) + VALUE
+fn extract_tlv_value(data: &str, tag: &str) -> String {
+    if let Some(pos) = data.find(tag) {
+        let start = pos + 2; // Skip tag
+        if start + 3 <= data.len() {
+            if let Ok(len) = data[start..start+3].parse::<usize>() {
+                let value_start = start + 3;
+                if value_start + len <= data.len() {
+                    return data[value_start..value_start+len].to_string();
+                }
+            }
+        }
+    }
+    String::new()
 }
 
 // function build_nepting_message removed
