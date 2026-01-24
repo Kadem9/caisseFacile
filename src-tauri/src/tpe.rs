@@ -339,14 +339,15 @@ fn build_payment_message(amount_cents: u32, pos_number: &str, protocol_version: 
         let amount = format!("{:08}", amount_cents);
         format!("{}{}{}{}", tx_type, pos_num, amount, "978")
     } else if protocol_version == 3 {
-        // Concert V3 binary format (19 chars total):
-        // THIS FORMAT SHOWS AMOUNT ON TPE (unlike TLV which fails with AF=09)
+        // Concert V3 binary format (17 chars total):
+        // TPE affiche 100000€ avec 19 chars (12-digit amount) = décalage!
+        // Essai avec 10-digit amount = 17 chars total
         //   Type: 2 chars ("00" = debit)
         //   N° caisse: 2 chars  
-        //   Amount: 12 chars (centimes)
+        //   Amount: 10 chars (centimes) - NOT 12!
         //   Currency: 3 chars
         let tx_type = "00";
-        let amount = format!("{:012}", amount_cents);
+        let amount = format!("{:010}", amount_cents); // 10 digits, not 12!
         format!("{}{}{}{}", tx_type, pos_num, amount, "978")
     } else if protocol_version == 4 {
         // Concert V3 TLV format (Caisse-AP style)
