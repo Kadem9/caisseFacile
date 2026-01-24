@@ -326,10 +326,10 @@ fn build_payment_message(amount_cents: u32, pos_number: &str, protocol_version: 
     //   Amount: 8 chars (centimes)
     //   Currency: 3 chars
     //
-    // Concert V3 format (17 chars total):
+    // Concert V3 format (19 chars total):
     //   Type: 2 chars ("00" = debit)
     //   N° caisse: 2 chars
-    //   Amount: 10 chars (centimes)
+    //   Amount: 12 chars (centimes) - IMPORTANT: 12 not 10!
     //   Currency: 3 chars
     
     // Safely handle pos_number to be exactly 2 digits
@@ -347,9 +347,9 @@ fn build_payment_message(amount_cents: u32, pos_number: &str, protocol_version: 
         let amount = format!("{:08}", amount_cents);
         format!("{}{}{}{}", tx_type, pos_num, amount, "978")
     } else {
-        // Concert V3: 2-char type + 2-char pos + 10-char amount + 3-char currency = 17 chars
+        // Concert V3: 2-char type + 2-char pos + 12-char amount + 3-char currency = 19 chars
         let tx_type = "00"; // Two chars for V3
-        let amount = format!("{:010}", amount_cents);
+        let amount = format!("{:012}", amount_cents); // 12 digits!
         format!("{}{}{}{}", tx_type, pos_num, amount, "978")
     };
     
