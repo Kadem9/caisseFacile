@@ -320,18 +320,6 @@ pub async fn test_tpe_connection(port_name: String, baud_rate: u32) -> TpeTestRe
 }
 
 fn build_payment_message(amount_cents: u32, pos_number: &str, protocol_version: u8) -> Vec<u8> {
-    // Concert V2 format (14 chars total):
-    //   Type: 1 char ("0" = debit, "1" = cancel)
-    //   N° caisse: 2 chars
-    //   Amount: 8 chars (centimes)
-    //   Currency: 3 chars
-    //
-    // Concert V3 format (19 chars total):
-    //   Type: 2 chars ("00" = debit)
-    //   N° caisse: 2 chars
-    //   Amount: 12 chars (centimes) - IMPORTANT: 12 not 10!
-    //   Currency: 3 chars
-    
     // Safely handle pos_number to be exactly 2 digits
     let pos_num = if pos_number.len() >= 2 { 
         pos_number[..2].to_string() 
@@ -342,15 +330,43 @@ fn build_payment_message(amount_cents: u32, pos_number: &str, protocol_version: 
     };
     
     let data = if protocol_version == 2 {
-        // Concert V2: 1-char type + 2-char pos + 8-char amount + 3-char currency = 14 chars
-        let tx_type = "0"; // Single char for V2
+        // Concert V2 binary format (14 chars total):
+        //   Type: 1 char ("0" = debit)
+        //   N° caisse: 2 chars
+        //   Amount: 8 chars (centimes)
+        //   Currency: 3 chars
+        let tx_type = "0";
         let amount = format!("{:08}", amount_cents);
         format!("{}{}{}{}", tx_type, pos_num, amount, "978")
     } else {
-        // Concert V3: 2-char type + 2-char pos + 12-char amount + 3-char currency = 19 chars
-        let tx_type = "00"; // Two chars for V3
-        let amount = format!("{:012}", amount_cents); // 12 digits!
-        format!("{}{}{}{}", tx_type, pos_num, amount, "978")
+        // Concert V3 TLV format (same as Caisse-AP IP)
+        // Format: TAG(2 letters) + LENGTH(3 digits) + VALUE
+        fn tlv(tag: &str, value: &str) -> String {
+            format!("{}{:03}{}", tag, value.len(), value)
+        }
+        
+        let mut msg = String::new();
+        
+        // CZ = Protocol version (3.2)
+        msg.push_str(&tlv("CZ", "0320"));
+        
+        // CA = POS number
+        msg.push_str(&tlv("CA", &pos_num));
+        
+        // CE = Currency (978 = EUR)
+        msg.push_str(&tlv("CE", "978"));
+        
+        // BA = Answer mode: "0" = answer at end of transaction
+        msg.push_str(&tlv("BA", "0"));
+        
+        // CD = Transaction type: "0" = debit
+        msg.push_str(&tlv("CD", "0"));
+        
+        // CB = Amount in cents (12 digits)
+        let amount_str = format!("{:012}", amount_cents);
+        msg.push_str(&tlv("CB", &amount_str));
+        
+        msg
     };
     
     println!("Building Concert V{} message ({}chars): {}", protocol_version, data.len(), data);
