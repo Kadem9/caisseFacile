@@ -320,7 +320,10 @@ pub async fn test_tpe_connection(port_name: String, baud_rate: u32) -> TpeTestRe
 }
 
 fn build_payment_message(amount_cents: u32, pos_number: &str, protocol_version: u8) -> Vec<u8> {
-    let tx_type = "01"; // Payment
+    // Transaction types in Concert protocol:
+    // "00" = Payment/Debit (standard purchase)
+    // "01" = Cancel/Void (NOT for payments!)
+    let tx_type = "00"; // Payment/Debit
     
     // Safely handle pos_number to be exactly 2 digits
     let pos_num = if pos_number.len() >= 2 { 
