@@ -320,10 +320,17 @@ pub async fn test_tpe_connection(port_name: String, baud_rate: u32) -> TpeTestRe
 }
 
 fn build_payment_message(amount_cents: u32, pos_number: &str, protocol_version: u8) -> Vec<u8> {
-    // Transaction types in Concert protocol:
-    // "00" = Payment/Debit (standard purchase)
-    // "01" = Cancel/Void (NOT for payments!)
-    let tx_type = "00"; // Payment/Debit
+    // Concert V2 format (14 chars total):
+    //   Type: 1 char ("0" = debit, "1" = cancel)
+    //   N° caisse: 2 chars
+    //   Amount: 8 chars (centimes)
+    //   Currency: 3 chars
+    //
+    // Concert V3 format (17 chars total):
+    //   Type: 2 chars ("00" = debit)
+    //   N° caisse: 2 chars
+    //   Amount: 10 chars (centimes)
+    //   Currency: 3 chars
     
     // Safely handle pos_number to be exactly 2 digits
     let pos_num = if pos_number.len() >= 2 { 
@@ -334,19 +341,20 @@ fn build_payment_message(amount_cents: u32, pos_number: &str, protocol_version: 
         "01".to_string() 
     };
     
-    // Concert V2 = 8 digits, Concert V3 = 10 digits
-    let amount = if protocol_version == 2 {
-        format!("{:08}", amount_cents) // Concert V2 (Indigo Move/500)
+    let data = if protocol_version == 2 {
+        // Concert V2: 1-char type + 2-char pos + 8-char amount + 3-char currency = 14 chars
+        let tx_type = "0"; // Single char for V2
+        let amount = format!("{:08}", amount_cents);
+        format!("{}{}{}{}", tx_type, pos_num, amount, "978")
     } else {
-        format!("{:010}", amount_cents) // Concert V3 (Modern terminals)
+        // Concert V3: 2-char type + 2-char pos + 10-char amount + 3-char currency = 17 chars
+        let tx_type = "00"; // Two chars for V3
+        let amount = format!("{:010}", amount_cents);
+        format!("{}{}{}{}", tx_type, pos_num, amount, "978")
     };
     
-    // Currency code: 978 = EUR
-    let currency = "978"; 
-    
-    let data = format!("{}{}{}{}", tx_type, pos_num, amount, currency);
-    println!("Building Concert V{} message Data (length {}): {}", protocol_version, data.len(), data);
-    log_to_file(&format!("Concert V{} message: {}", protocol_version, data));
+    println!("Building Concert V{} message ({}chars): {}", protocol_version, data.len(), data);
+    log_to_file(&format!("Concert V{} message ({}chars): {}", protocol_version, data.len(), data));
     
     let mut lrc_input: Vec<u8> = data.as_bytes().to_vec();
     lrc_input.push(ETX);
@@ -797,28 +805,91 @@ fn parse_response(data: &[u8], amount_cents: u32, raw: &str) -> Result<TpePaymen
     if let (Some(s), Some(e)) = (stx, etx) {
         if e > s {
             let body = &data[s+1..e];
+            let body_str = String::from_utf8_lossy(body);
+            log_to_file(&format!("Response body: {} ({}chars)", body_str, body_str.len()));
             
-            // Success detection: '0' in body (Concert: ResponseCode '0')
-            if body.contains(&b'0') { 
-                  return Ok(TpePaymentResponse {
+            // Concert response format:
+            // V2: TYPE(1) + RESULT(2) + POS(2) + AMOUNT(8) + ...
+            // V3: TYPE(2) + RESULT(2) + POS(2) + AMOUNT(10) + ...
+            // 
+            // Result codes:
+            // "00" = Success (payment accepted)
+            // "01" = Cancelled by operator
+            // "02" = Transaction refused by card
+            // "03" = Error communication
+            // "10" = Fonction impossible (function not available)
+            // etc.
+            
+            // Try to extract result code (usually at position 1 or 2)
+            // The result code is 2 chars after the type
+            let result_code = if body_str.len() >= 3 {
+                // Try V2 format: TYPE(1) + RESULT(2)
+                let v2_code = &body_str[1..3.min(body_str.len())];
+                // Try V3 format: TYPE(2) + RESULT(2)
+                let v3_code = if body_str.len() >= 4 { &body_str[2..4] } else { "" };
+                
+                log_to_file(&format!("V2 result code position: '{}', V3 position: '{}'", v2_code, v3_code));
+                
+                // Check which one looks like a valid response code
+                if v2_code == "00" {
+                    "00".to_string()
+                } else if v3_code == "00" {
+                    "00".to_string()
+                } else if v2_code == "10" || v3_code == "10" {
+                    "10".to_string()
+                } else if v2_code == "01" || v3_code == "01" {
+                    "01".to_string()
+                } else {
+                    // Return whichever looks like a 2-digit code
+                    v2_code.to_string()
+                }
+            } else {
+                "??".to_string()
+            };
+            
+            log_to_file(&format!("Parsed result code: {}", result_code));
+            
+            // Success only if result code is "00"
+            if result_code == "00" {
+                return Ok(TpePaymentResponse {
                     success: true,
-                    transaction_result: "0".to_string(),
+                    transaction_result: "00".to_string(),
                     amount_cents,
                     authorization_number: None,
                     error_message: None,
                     raw_response: Some(raw.to_string()),
                 });
-             }
+            } else {
+                // Map error codes to messages
+                let error_msg = match result_code.as_str() {
+                    "01" => "Transaction annulée par l'opérateur",
+                    "02" => "Transaction refusée par la carte",
+                    "03" => "Erreur de communication",
+                    "10" => "Fonction impossible (vérifiez la config TPE)",
+                    "11" => "Timeout - pas de réponse",
+                    _ => "Transaction échouée",
+                };
+                
+                return Ok(TpePaymentResponse {
+                    success: false,
+                    transaction_result: result_code.clone(),
+                    amount_cents,
+                    authorization_number: None,
+                    error_message: Some(format!("{} (code: {})", error_msg, result_code)),
+                    raw_response: Some(raw.to_string()),
+                });
+            }
         }
     }
     
-    // Simple ACK or just raw data without framing is ambiguous
+    // No STX/ETX framing found
+    log_to_file("No valid framing found in response");
     Ok(TpePaymentResponse {
         success: false,
-        transaction_result: "?".to_string(),
+        transaction_result: "??".to_string(),
         amount_cents,
         authorization_number: None,
-        error_message: Some(format!("No success code found in: {}", raw)),
+        error_message: Some(format!("Format de réponse invalide: {}", raw)),
         raw_response: Some(raw.to_string()),
     })
 }
