@@ -330,34 +330,48 @@ fn build_payment_message(amount_cents: u32, pos_number: &str, protocol_version: 
     };
     
     let data = if protocol_version == 2 {
-        // Concert V2 binary format (14 chars total):
-        //   Type: 1 char ("0" = debit)
-        //   N° caisse: 2 chars
+        // Concert V3 TLV Format (FIT302 documentation)
+        // Format: TAG + LENGTH(3 digits) + DATA
+        // STX + TLV_DATA + ETX + LRC pour USB série
+        
+        // CZ: Version protocole = "0300" (fixe)
+        let cz = "CZ0040300";
+        
+        // CJ: Identifiant protocole caisse (12 chars)
+        let cj = "CJ012000000000001";
+        
+        // CA: N° de caisse (2 chars)
+        let ca = format!("CA002{:02}", pos_num);
+        
+        // CB: Montant en centimes (variable, 2-12 chars)
+        let amount_str = format!("{}", amount_cents);
+        let cb = format!("CB{:03}{}", amount_str.len(), amount_str);
+        
+        // CD: Type action = 0 (débit)
+        let cd = "CD0010";
+        
+        // CE: Devise = 978 (EUR)
+        let ce = "CE003978";
+        
+        format!("{}{}{}{}{}{}", cz, cj, ca, cb, cd, ce)
+    } else if protocol_version == 3 {
+        // Concert V3 serial format (13 chars):
+        // Essai SANS type de transaction - format série simple
+        //   N° caisse: 2 chars  
         //   Amount: 8 chars (centimes)
         //   Currency: 3 chars
-        let tx_type = "0";
+        // Total: 13 chars
         let amount = format!("{:08}", amount_cents);
-        format!("{}{}{}{}", tx_type, pos_num, amount, "978")
-    } else if protocol_version == 3 {
-        // Concert V3 binary format (17 chars total):
-        // TPE affiche 100000€ avec 19 chars (12-digit amount) = décalage!
-        // Essai avec 10-digit amount = 17 chars total
-        //   Type: 2 chars ("00" = debit)
-        //   N° caisse: 2 chars  
-        //   Amount: 10 chars (centimes) - NOT 12!
-        //   Currency: 3 chars
-        let tx_type = "00";
-        let amount = format!("{:010}", amount_cents); // 10 digits, not 12!
-        format!("{}{}{}{}", tx_type, pos_num, amount, "978")
+        format!("{}{}{}", pos_num, amount, "978")
     } else if protocol_version == 4 {
         // Concert V3 TLV format (Caisse-AP style)
-        // WARNING: Returns AF=09 on Indigo Move/500
+        // TPE uses Concert V3 spec 3.01 (not 3.20!)
         fn tlv(tag: &str, value: &str) -> String {
             format!("{}{:03}{}", tag, value.len(), value)
         }
         
         let mut msg = String::new();
-        msg.push_str(&tlv("CZ", "0320"));
+        msg.push_str(&tlv("CZ", "0301")); // VERSION 3.01, not 3.20!
         msg.push_str(&tlv("CA", &pos_num));
         msg.push_str(&tlv("CE", "978"));
         msg.push_str(&tlv("CD", "0"));
@@ -378,6 +392,7 @@ fn build_payment_message(amount_cents: u32, pos_number: &str, protocol_version: 
     println!("Building Concert V{} message ({}chars): {}", protocol_version, data.len(), data);
     log_to_file(&format!("Concert V{} message ({}chars): {}", protocol_version, data.len(), data));
     
+    // LRC = XOR de DATA + ETX (protocole Ingenico Concert V3)
     let mut lrc_input: Vec<u8> = data.as_bytes().to_vec();
     lrc_input.push(ETX);
     let lrc = calculate_lrc(&lrc_input);
