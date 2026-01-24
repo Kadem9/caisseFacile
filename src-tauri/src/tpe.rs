@@ -338,40 +338,40 @@ fn build_payment_message(amount_cents: u32, pos_number: &str, protocol_version: 
         let tx_type = "0";
         let amount = format!("{:08}", amount_cents);
         format!("{}{}{}{}", tx_type, pos_num, amount, "978")
-    } else {
-        // Concert V3 TLV format (same as Caisse-AP IP)
-        // Format: TAG(2 letters) + LENGTH(3 digits) + VALUE
-        // Order matters! Must match Caisse-AP specification
+    } else if protocol_version == 3 {
+        // Concert V3 binary format (19 chars total):
+        // THIS FORMAT SHOWS AMOUNT ON TPE (unlike TLV which fails with AF=09)
+        //   Type: 2 chars ("00" = debit)
+        //   N° caisse: 2 chars  
+        //   Amount: 12 chars (centimes)
+        //   Currency: 3 chars
+        let tx_type = "00";
+        let amount = format!("{:012}", amount_cents);
+        format!("{}{}{}{}", tx_type, pos_num, amount, "978")
+    } else if protocol_version == 4 {
+        // Concert V3 TLV format (Caisse-AP style)
+        // WARNING: Returns AF=09 on Indigo Move/500
         fn tlv(tag: &str, value: &str) -> String {
             format!("{}{:03}{}", tag, value.len(), value)
         }
         
         let mut msg = String::new();
-        
-        // CZ = Protocol version (MUST be first!) - "0320" for v3.2
         msg.push_str(&tlv("CZ", "0320"));
-        
-        // CA = POS number (caisse number)
         msg.push_str(&tlv("CA", &pos_num));
-        
-        // CE = Currency ISO code (978 = EUR)
         msg.push_str(&tlv("CE", "978"));
-        
-        // CD = Transaction type: "0" = debit payment
         msg.push_str(&tlv("CD", "0"));
-        
-        // CB = Amount in cents (12 digits padded)
-        let amount_str = format!("{:012}", amount_cents);
-        msg.push_str(&tlv("CB", &amount_str));
-        
-        // TI = Transaction ID (6 digits numeric) - MAY BE REQUIRED!
-        let tx_id = format!("{:06}", std::time::SystemTime::now()
+        msg.push_str(&tlv("CB", &format!("{:012}", amount_cents)));
+        msg.push_str(&tlv("TI", &format!("{:06}", std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
-            .as_secs() % 1000000);
-        msg.push_str(&tlv("TI", &tx_id));
+            .as_secs() % 1000000)));
         
         msg
+    } else {
+        // Default: SmilePay or other - use V3 binary
+        let tx_type = "00";
+        let amount = format!("{:012}", amount_cents);
+        format!("{}{}{}{}", tx_type, pos_num, amount, "978")
     };
     
     println!("Building Concert V{} message ({}chars): {}", protocol_version, data.len(), data);
