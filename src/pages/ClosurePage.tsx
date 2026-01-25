@@ -52,7 +52,7 @@ export const ClosurePage: React.FC = () => {
     const [notes, setNotes] = useState<string>('');
     const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
     const [backendSession, setBackendSession] = useState<CurrentSessionData | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
+    const [_isLoading, setIsLoading] = useState(true);
     const [_error, setError] = useState<string | null>(null);
 
     // Fetch session data from backend
@@ -179,7 +179,7 @@ export const ClosurePage: React.FC = () => {
                     userId: currentClosure.userId,
 
                     actualAmount: actualAmount,
-                    theoreticalAmount: expectedCash,
+                    expectedAmount: expectedCash,
                     difference: difference,
                     notes: notes || undefined,
                     isSynced: false,

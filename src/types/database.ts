@@ -127,14 +127,15 @@ export interface TransactionItemWithProduct extends TransactionItem {
 export interface CashClosure {
   id: number;
   userId: number;
-  openedAt: Date;
-  closedAt?: Date;
+  openedAt: string | Date;
+  closedAt?: string | Date;
   initialAmount?: number;
   expectedAmount: number;
   actualAmount?: number;
   difference?: number;
   notes?: string;
   isSynced: boolean;
+  deviceName?: string;
 }
 
 export interface CashClosureWithDetails extends CashClosure {
@@ -155,8 +156,9 @@ export interface CashMovement {
   type: CashMovementType;
   amount: number;
   reason?: string;
-  createdAt: Date;
+  createdAt: string | Date;
   isSynced: boolean;
+  deviceName?: string;
 }
 
 // ===================================

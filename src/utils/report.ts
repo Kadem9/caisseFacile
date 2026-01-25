@@ -333,8 +333,8 @@ export function generateClosureReport(closure: CashClosure, transactions: Transa
                 title: '⏰ Période',
                 type: 'stats',
                 data: [
-                    { label: 'Ouverture', value: formatDateTime(closure.openedAt) },
-                    { label: 'Fermeture', value: closure.closedAt ? formatDateTime(closure.closedAt) : 'En cours' },
+                    { label: 'Ouverture', value: formatDateTime(new Date(closure.openedAt)) },
+                    { label: 'Fermeture', value: closure.closedAt ? formatDateTime(new Date(closure.closedAt)) : 'En cours' },
                 ],
             },
             {

@@ -50,7 +50,6 @@ interface ClosureState {
 
 const getDeviceName = () => {
     if (typeof localStorage !== 'undefined') {
-        const config = localStorage.getItem('ma-caisse-hardware-config');
         // ma-caisse-device-name is set in SettingsPage
         return localStorage.getItem('ma-caisse-device-name') || 'Caisse Principale';
     }

@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { writeFile, mkdir, BaseDirectory } from '@tauri-apps/plugin-fs';
+import { writeFile, mkdir } from '@tauri-apps/plugin-fs';
 import { documentDir, join } from '@tauri-apps/api/path';
 import type { CashClosureWithDetails } from '../types';
 import { format } from 'date-fns';
@@ -8,7 +8,6 @@ import { fr } from 'date-fns/locale';
 
 export const generateClosurePDF = async (closure: CashClosureWithDetails, products: any[] = [], categories: any[] = []): Promise<string> => {
     const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.width;
     const margin = 15;
 
     // --- Header ---
@@ -190,7 +189,7 @@ export const generateClosurePDF = async (closure: CashClosureWithDetails, produc
         autoTable(doc, {
             startY: yPos,
             head: [['Heure', 'Type', 'Raison', 'Montant']],
-            body: movementsData,
+            body: movementsData as any,
             theme: 'plain',
             styles: { fontSize: 9 },
             columnStyles: { 3: { halign: 'right' } }

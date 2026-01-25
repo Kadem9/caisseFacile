@@ -90,7 +90,6 @@ export const ActivityPage: React.FC = () => {
                 <div className="space-y-4">
                     {filteredItems.map((item, idx) => {
                         const date = new Date(item.date);
-                        const isToday = date.toDateString() === new Date().toDateString();
 
                         let typeColor = 'bg-slate-100 text-slate-800';
                         let icon = '•';
