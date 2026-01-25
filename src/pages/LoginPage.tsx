@@ -5,7 +5,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { invoke } from '@tauri-apps/api/core';
-import { getCurrentWindow } from '@tauri-apps/api/window';
 import { confirm } from '@tauri-apps/plugin-dialog';
 import { UserCard } from '../components/auth';
 import { NumPad, PinDisplay, PowerIcon, XIcon } from '../components/ui';
