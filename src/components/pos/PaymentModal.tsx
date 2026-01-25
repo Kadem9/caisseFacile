@@ -334,7 +334,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                                     <CardIcon size={48} />
                                     <span>Carte</span>
                                 </button>
-                                <button
+                                {/* <button
                                     className="payment-modal__method-btn payment-modal__method-btn--mixed"
                                     onClick={() => handleMethodSelect('mixed')}
                                     type="button"
@@ -344,7 +344,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                                         <CardIcon size={32} />
                                     </div>
                                     <span>Mixte</span>
-                                </button>
+                                </button> */}
                             </div>
                         </div>
                     )}

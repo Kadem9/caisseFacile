@@ -94,11 +94,12 @@ export const LoginPage: React.FC = () => {
             await generateAndSaveDailyReport(transactions);
             setBackupStatus("Sauvegarde réussie !");
             return true;
-        } catch (error) {
+        } catch (error: any) {
             console.error("Backup failed", error);
             await logger.error("Backup failed during close/shutdown", error);
-            setBackupStatus("Erreur sauvegarde.");
-            // We proceed even if backup fails, but maybe log it?
+            // Show specific error if available
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            setBackupStatus(`Erreur: ${errorMsg.slice(0, 30)}...`);
             return false;
         }
     };
@@ -111,7 +112,8 @@ export const LoginPage: React.FC = () => {
         if (!confirmed) return;
 
         await performBackup();
-        await getCurrentWindow().close();
+        await performBackup();
+        await invoke('quit_app');
     }, [transactions]);
 
     const handleShutdown = useCallback(async () => {

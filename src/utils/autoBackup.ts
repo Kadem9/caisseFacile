@@ -1,18 +1,12 @@
-
 import { jsPDF } from "jspdf";
-import "jspdf-autotable";
+import autoTable from "jspdf-autotable";
 import { writeFile, BaseDirectory, exists, mkdir } from '@tauri-apps/plugin-fs';
 import { Transaction } from '../types';
 import { logger } from '../services/logger';
 
-// Augment jsPDF type for autotable
-interface jsPDFWithAutoTable extends jsPDF {
-    autoTable: (options: any) => void;
-}
-
 export async function generateAndSaveDailyReport(transactions: Transaction[]): Promise<string> {
     try {
-        const doc = new jsPDF() as jsPDFWithAutoTable;
+        const doc = new jsPDF();
         const now = new Date();
         const dateStr = now.toLocaleDateString('fr-FR');
         const timeStr = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h');
@@ -59,7 +53,7 @@ export async function generateAndSaveDailyReport(transactions: Transaction[]): P
         doc.text(`Transactions : ${dayTransactions.length}`, 14, 86);
 
         // Transactions Table
-        doc.autoTable({
+        autoTable(doc, {
             startY: 95,
             head: [['Heure', 'Montant', 'Paiement', 'Rendu']],
             body: dayTransactions.map(t => [
@@ -82,26 +76,45 @@ export async function generateAndSaveDailyReport(transactions: Transaction[]): P
             doc.text(`Sauvegarde auto - ${dateStr} - Page ${i}/${pageCount}`, 105, 290, { align: "center" });
         }
 
-        // --- File Saving ---
+        // --- File Saving with Fallback ---
         const pdfOutput = doc.output('arraybuffer');
         const fileName = `Backup_${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}h${String(now.getMinutes()).padStart(2, '0')}.pdf`;
         const dirName = 'Backups';
 
-        // Check if directory exists, create if not
-        const existsDir = await exists(dirName, { baseDir: BaseDirectory.Document });
-        if (!existsDir) {
-            await mkdir(dirName, { baseDir: BaseDirectory.Document, recursive: true });
+        // Helper to try saving in a specific directory
+        const trySave = async (baseDir: BaseDirectory, locationName: string) => {
+            try {
+                const existsDir = await exists(dirName, { baseDir });
+                if (!existsDir) {
+                    await mkdir(dirName, { baseDir, recursive: true });
+                }
+                const filePath = `${dirName}/${fileName}`;
+                await writeFile(filePath, new Uint8Array(pdfOutput), { baseDir });
+                await logger.info(`Backup saved successfully to ${locationName}: ${filePath}`);
+                return filePath;
+            } catch (err: any) {
+                console.warn(`Failed to save to ${locationName}:`, err);
+                throw new Error(`Échec ${locationName}: ${err?.message || err}`);
+            }
+        };
+
+        try {
+            // Priority 1: Documents
+            return await trySave(BaseDirectory.Document, 'Documents');
+        } catch (docError) {
+            console.warn("Primary backup failed, trying fallback...", docError);
+            try {
+                // Priority 2: AppLocalData (Application Support)
+                return await trySave(BaseDirectory.AppLocalData, 'AppLocalData');
+            } catch (appDataError) {
+                // Throw combined error if both fail
+                throw new Error(`Backup failed in both locations. Doc: ${docError instanceof Error ? docError.message : docError}, AppData: ${appDataError instanceof Error ? appDataError.message : appDataError}`);
+            }
         }
 
-        const filePath = `${dirName}/${fileName}`;
-        await writeFile(filePath, new Uint8Array(pdfOutput), { baseDir: BaseDirectory.Document });
-
-        await logger.info(`Backup saved successfully: ${filePath}`);
-        return filePath;
-
     } catch (error) {
-        console.error("Auto backup failed:", error);
-        await logger.error("Auto backup failed", error);
+        console.error("Auto backup failed fatal:", error);
+        await logger.error("Auto backup failed fatal", error);
         throw error;
     }
 }

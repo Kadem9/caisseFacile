@@ -21,14 +21,15 @@ import {
 } from '../components/ui';
 import './SettingsPage.css';
 import {
-    getApiUrl,
-    setApiUrl as setApiUrlService,
+    // getApiUrl, // Removed: using useSyncStore
+    // setApiUrl as setApiUrlService, // Removed: using useSyncStore
     DEFAULT_API_URL,
     checkHealth,
     clearAllData,
 } from '../services/api';
 import { useTransactionStore } from '../stores/transactionStore';
 import { useClosureStore } from '../stores/closureStore';
+import { useSyncStore } from '../stores/syncStore';
 
 interface SerialPortInfo {
     name: string;
@@ -134,6 +135,9 @@ export const SettingsPage: React.FC = () => {
 
     // Device Name
     const [deviceName, setDeviceName] = useState(() => localStorage.getItem('ma-caisse-device-name') || 'Caisse Principale');
+
+    // Sync Store
+    const { apiUrl, setApiUrl } = useSyncStore();
 
     // Load configuration on mount
     useEffect(() => {
@@ -717,7 +721,7 @@ export const SettingsPage: React.FC = () => {
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => {
-                                        setApiUrlService(DEFAULT_API_URL);
+                                        setApiUrl(DEFAULT_API_URL);
                                         window.location.reload();
                                     }}
                                 >
@@ -732,9 +736,9 @@ export const SettingsPage: React.FC = () => {
                                         <input
                                             type="url"
                                             placeholder={DEFAULT_API_URL}
-                                            value={getApiUrl()}
+                                            value={apiUrl}
                                             onChange={(e) => {
-                                                setApiUrlService(e.target.value);
+                                                setApiUrl(e.target.value);
                                             }}
                                             style={{ flex: 1 }}
                                         />
@@ -751,7 +755,7 @@ export const SettingsPage: React.FC = () => {
                                         </Button>
                                     </div>
                                     <p className="settings-form__help">
-                                        URL actuelle : <code>{getApiUrl()}</code>
+                                        URL actuelle : <code>{apiUrl}</code>
                                     </p>
                                 </div>
 
