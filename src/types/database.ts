@@ -129,6 +129,7 @@ export interface CashClosure {
   userId: number;
   openedAt: Date;
   closedAt?: Date;
+  initialAmount?: number;
   expectedAmount: number;
   actualAmount?: number;
   difference?: number;
@@ -139,6 +140,23 @@ export interface CashClosure {
 export interface CashClosureWithDetails extends CashClosure {
   user: User;
   transactions: Transaction[];
+  movements?: CashMovement[];
+}
+
+// ===================================
+// Cash Movement Entity (Withdrawals/Deposits)
+// ===================================
+export type CashMovementType = 'withdrawal' | 'deposit';
+
+export interface CashMovement {
+  id: number;
+  closureId: number;
+  userId: number;
+  type: CashMovementType;
+  amount: number;
+  reason?: string;
+  createdAt: Date;
+  isSynced: boolean;
 }
 
 // ===================================

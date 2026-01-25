@@ -5,10 +5,10 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, PackageIcon, ChartIcon, SettingsIcon, LogoutIcon, AlertIcon, HamburgerIcon, ShoppingCartIcon, TrashIcon, PlusIcon, MinusIcon, CardIcon } from '../components/ui';
-import { PaymentModal, MenuCompositionModal } from '../components/pos';
+import { PaymentModal, MenuCompositionModal, CashMovementModal, OpenClosureModal } from '../components/pos';
 import type { PaymentResult } from '../components/pos';
-import { getProductImageUrl } from '../helpers/urlHelper';
-import { useAuthStore, useCartStore, useTransactionStore, useProductStore, useMenuStore, useSyncStore } from '../stores';
+import { CachedImage } from '../components/ui/CachedImage';
+import { useAuthStore, useCartStore, useTransactionStore, useProductStore, useMenuStore, useSyncStore, useClosureStore } from '../stores';
 import type { Menu, Product, Transaction } from '../types';
 import './POSPage.css';
 import logoImg from '../assets/logo-asmsp.png';
@@ -29,8 +29,37 @@ export const POSPage: React.FC = () => {
 
     const [activeTab, setActiveTab] = useState<'products' | 'menus'>('products');
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+    const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
+    const [isOpenClosureModalOpen, setIsOpenClosureModalOpen] = useState(false);
+    const [cashMovementType, setCashMovementType] = useState<'withdrawal' | 'deposit'>('withdrawal');
+
     const [selectedMenu, setSelectedMenu] = useState<Menu | null>(null);
     const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }));
+
+    const { isClosureOpen, openClosure, addMovement } = useClosureStore();
+
+    useEffect(() => {
+        // Enforce open session
+        if (!isClosureOpen()) {
+            setIsOpenClosureModalOpen(true);
+        }
+    }, [isClosureOpen]);
+
+    const handleOpenClosure = useCallback((initialAmount: number) => {
+        if (!currentUser) return;
+        openClosure({ userId: currentUser.id, initialAmount });
+        setIsOpenClosureModalOpen(false);
+    }, [currentUser, openClosure]);
+
+    const handleCashMovement = useCallback((data: { type: 'withdrawal' | 'deposit'; amount: number; reason: string }) => {
+        if (!currentUser) return;
+        addMovement({ userId: currentUser.id, ...data });
+    }, [currentUser, addMovement]);
+
+    const openCashMovement = (type: 'withdrawal' | 'deposit') => {
+        setCashMovementType(type);
+        setIsWithdrawModalOpen(true);
+    };
 
     // Use useMemo to ensure filteredProducts updates when activeCategory or products change
     const filteredProducts = useMemo(() => {
@@ -100,6 +129,7 @@ export const POSPage: React.FC = () => {
             alertThreshold: 0,
             isActive: true,
             printTicket: true,
+            imagePath: menu.imagePath, // Ajouter l'image du menu
             createdAt: new Date(),
             updatedAt: new Date(),
         };
@@ -336,6 +366,24 @@ export const POSPage: React.FC = () => {
                         </button>
                         <button
                             className="pos-header__nav-btn"
+                            onClick={() => openCashMovement('withdrawal')}
+                            type="button"
+                            title="Sortie de Caisse"
+                            style={{ color: '#ef4444' }}
+                        >
+                            <span style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>- €</span>
+                        </button>
+                        <button
+                            className="pos-header__nav-btn"
+                            onClick={() => openCashMovement('deposit')}
+                            type="button"
+                            title="Entrée de Caisse"
+                            style={{ color: '#10b981' }}
+                        >
+                            <span style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>+ €</span>
+                        </button>
+                        <button
+                            className="pos-header__nav-btn"
                             onClick={() => navigate('/admin/settings')}
                             type="button"
                             title="Paramètres"
@@ -438,8 +486,8 @@ export const POSPage: React.FC = () => {
                                         >
                                             <div className="btn--product__visual">
                                                 {product.imagePath ? (
-                                                    <img
-                                                        src={getProductImageUrl(product.imagePath)}
+                                                    <CachedImage
+                                                        src={product.imagePath}
                                                         alt={product.name}
                                                         className="btn--product__image"
                                                     />
@@ -476,8 +524,8 @@ export const POSPage: React.FC = () => {
                                 >
                                     <div className="btn--product__visual">
                                         {menu.imagePath ? (
-                                            <img
-                                                src={getProductImageUrl(menu.imagePath)}
+                                            <CachedImage
+                                                src={menu.imagePath}
                                                 alt={menu.name}
                                                 className="btn--product__image"
                                             />
@@ -509,53 +557,60 @@ export const POSPage: React.FC = () => {
                                 <p>Panier vide</p>
                             </div>
                         ) : (
-                            items.map((item) => (
-                                <div key={item.product.id} className="pos-cart__item">
-                                    {item.product.imagePath ? (
-                                        <div className="pos-cart__item-image-wrapper">
-                                            <img
-                                                src={getProductImageUrl(item.product.imagePath)}
-                                                alt={item.product.name}
-                                                className="pos-cart__item-image"
-                                            />
+                            items.map((item) => {
+                                const isMenu = item.product.id >= 100000;
+                                return (
+                                    <div key={item.product.id} className="pos-cart__item">
+                                        {item.product.imagePath ? (
+                                            <div className="pos-cart__item-image-wrapper">
+                                                <CachedImage
+                                                    src={item.product.imagePath}
+                                                    alt={item.product.name}
+                                                    className="pos-cart__item-image"
+                                                />
+                                            </div>
+                                        ) : (
+                                            <div className="pos-cart__item-image-wrapper pos-cart__item-image-placeholder">
+                                                {isMenu ? (
+                                                    <HamburgerIcon size={24} color="#3b82f6" />
+                                                ) : (
+                                                    <PackageIcon size={24} color="#94a3b8" />
+                                                )}
+                                            </div>
+                                        )}
+                                        <div className="pos-cart__item-details">
+                                            <div className="pos-cart__item-name">{item.product.name}</div>
+                                            <div className="pos-cart__item-unit-price">{formatPrice(item.product.price)} / unité</div>
+                                            <div className="pos-cart__item-total-price">{formatPrice(item.subtotal)}</div>
                                         </div>
-                                    ) : (
-                                        <div className="pos-cart__item-image-wrapper pos-cart__item-image-placeholder">
-                                            <PackageIcon size={24} color="#94a3b8" />
-                                        </div>
-                                    )}
-                                    <div className="pos-cart__item-details">
-                                        <div className="pos-cart__item-name">{item.product.name}</div>
-                                        <div className="pos-cart__item-unit-price">{formatPrice(item.product.price)} / unité</div>
-                                        <div className="pos-cart__item-total-price">{formatPrice(item.subtotal)}</div>
-                                    </div>
 
-                                    <div className="pos-cart__item-controls">
-                                        <button
-                                            className="pos-cart__item-btn"
-                                            onClick={() => decrementItem(item.product.id)}
-                                            type="button"
-                                        >
-                                            <MinusIcon size={16} />
-                                        </button>
-                                        <span className="pos-cart__item-qty">{item.quantity}</span>
-                                        <button
-                                            className="pos-cart__item-btn"
-                                            onClick={() => incrementItem(item.product.id)}
-                                            type="button"
-                                        >
-                                            <PlusIcon size={16} />
-                                        </button>
-                                        <button
-                                            className="pos-cart__item-btn pos-cart__item-btn--danger"
-                                            onClick={() => removeItem(item.product.id)}
-                                            type="button"
-                                        >
-                                            <TrashIcon size={16} />
-                                        </button>
+                                        <div className="pos-cart__item-controls">
+                                            <button
+                                                className="pos-cart__item-btn"
+                                                onClick={() => decrementItem(item.product.id)}
+                                                type="button"
+                                            >
+                                                <MinusIcon size={16} />
+                                            </button>
+                                            <span className="pos-cart__item-qty">{item.quantity}</span>
+                                            <button
+                                                className="pos-cart__item-btn"
+                                                onClick={() => incrementItem(item.product.id)}
+                                                type="button"
+                                            >
+                                                <PlusIcon size={16} />
+                                            </button>
+                                            <button
+                                                className="pos-cart__item-btn pos-cart__item-btn--danger"
+                                                onClick={() => removeItem(item.product.id)}
+                                                type="button"
+                                            >
+                                                <TrashIcon size={16} />
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
-                            ))
+                                );
+                            })
                         )}
                     </div>
 
@@ -609,6 +664,19 @@ export const POSPage: React.FC = () => {
                     onClose={() => setSelectedMenu(null)}
                 />
             )}
+
+            <CashMovementModal
+                isOpen={isWithdrawModalOpen}
+                onClose={() => setIsWithdrawModalOpen(false)}
+                onConfirm={handleCashMovement}
+                defaultType={cashMovementType}
+            />
+
+            <OpenClosureModal
+                isOpen={isOpenClosureModalOpen}
+                onConfirm={handleOpenClosure}
+                onClose={handleLogout}
+            />
         </div>
     );
 };

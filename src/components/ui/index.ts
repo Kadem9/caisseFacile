@@ -9,3 +9,5 @@ export { SyncStatus } from './SyncStatus';
 export { SplashScreen } from './SplashScreen';
 export { UpdateChecker } from './UpdateChecker';
 export * from './Icons';
+export * from './VirtualNumpad';
+export * from './VirtualKeyboard';

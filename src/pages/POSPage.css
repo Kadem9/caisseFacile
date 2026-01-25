@@ -709,3 +709,461 @@
     color: #94a3b8;
     border-color: transparent;
 }
+
+/* ===================================
+   RESPONSIVE DESIGN - Media Queries
+   =================================== */
+
+/* Tablette Large (max-width: 1200px) */
+@media (max-width: 1200px) {
+    .pos-header {
+        padding: 0.5rem 1rem;
+        height: 56px;
+    }
+
+    .pos-header__brand {
+        padding-right: 0.75rem;
+        gap: 0.5rem;
+    }
+
+    .pos-header__logo-wrapper {
+        width: 36px;
+        height: 36px;
+    }
+
+    /* Masquer le texte du statut, garder juste le dot */
+    .pos-header__status-badge span:not(.status-dot) {
+        display: none;
+    }
+
+    .pos-header__status-badge {
+        padding: 0.5rem;
+        min-width: 32px;
+    }
+
+    .pos-header__center {
+        padding-left: 0.75rem;
+        gap: 0.75rem;
+    }
+
+    /* Masquer le label "Session:" */
+    .pos-header__session-info .label {
+        display: none;
+    }
+
+    .pos-header__session-info {
+        padding: 0.35rem 0.6rem;
+    }
+
+    /* Masquer l'alerte stock - on voit déjà sur les produits */
+    .pos-header__alert {
+        display: none;
+    }
+
+    /* Masquer le texte "Se déconnecter" - garder juste l'icône */
+    .logout-btn span {
+        display: none;
+    }
+
+    .logout-btn {
+        padding: 0.5rem !important;
+        min-width: auto;
+    }
+
+    /* Masquer le nom utilisateur */
+    .pos-header__user-profile .user-name {
+        display: none;
+    }
+
+    .pos-header__user-profile {
+        margin-right: 0;
+    }
+
+    /* Cart plus étroit mais toujours à droite */
+    .pos-cart {
+        width: 300px;
+    }
+
+    /* Cart items optimisés dès 1200px */
+    .pos-cart__item {
+        padding: 0.5rem;
+        gap: 0.5rem;
+    }
+
+    .pos-cart__item-image-wrapper {
+        width: 40px;
+        height: 40px;
+    }
+
+    .pos-cart__item-details {
+        gap: 0.15rem;
+    }
+
+    .pos-cart__item-name {
+        font-size: 0.85rem;
+    }
+
+    /* Masquer le prix unitaire dès 1200px */
+    .pos-cart__item-unit-price {
+        display: none;
+    }
+
+    .pos-cart__item-total-price {
+        font-size: 0.9rem;
+        margin-top: 0;
+    }
+
+    .pos-cart__item-controls {
+        padding: 0.2rem;
+        gap: 0.35rem;
+    }
+
+    .pos-cart__item-btn {
+        width: 24px;
+        height: 24px;
+    }
+
+    .pos-cart__item-qty {
+        font-size: 0.9rem;
+        min-width: 20px;
+    }
+
+    .pos-products__grid {
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 0.6rem;
+        padding: 0 1rem 1rem;
+    }
+}
+
+/* Tablette (max-width: 1024px) */
+@media (max-width: 1024px) {
+    .pos-header {
+        padding: 0.4rem 0.75rem;
+        height: 50px;
+    }
+
+    .pos-header__brand {
+        border-right: none;
+        padding-right: 0;
+    }
+
+    .pos-header__logo-wrapper {
+        width: 32px;
+        height: 32px;
+    }
+
+    /* Masquer complètement le divider */
+    .pos-header__divider {
+        display: none;
+    }
+
+    /* Masquer la zone centre entière */
+    .pos-header__center {
+        display: none;
+    }
+
+    .pos-header__nav-btn {
+        width: 34px;
+        height: 34px;
+    }
+
+    .pos-header__nav {
+        gap: 0.25rem;
+    }
+
+    /* Main reste en row - cart toujours à droite */
+    .pos-main {
+        padding: 0.5rem;
+        gap: 0.5rem;
+    }
+
+    /* Cart plus compact mais à droite */
+    .pos-cart {
+        width: 260px;
+    }
+
+    .pos-cart__header {
+        padding: 0.75rem;
+    }
+
+    .pos-cart__title {
+        font-size: 1rem;
+    }
+
+    .pos-cart__footer {
+        padding: 0.75rem;
+    }
+
+    .pos-cart__total-row {
+        margin-bottom: 0.75rem;
+    }
+
+    .pos-cart__total-amount {
+        font-size: 1.5rem;
+    }
+
+    .pos-cart__pay-btn-large {
+        height: 48px;
+        font-size: 1rem;
+    }
+
+    /* Cart items plus compacts sur tablette */
+    .pos-cart__item {
+        padding: 0.5rem;
+        gap: 0.5rem;
+    }
+
+    .pos-cart__item-image-wrapper {
+        width: 36px;
+        height: 36px;
+    }
+
+    .pos-cart__item-name {
+        font-size: 0.8rem;
+    }
+
+    .pos-cart__item-unit-price {
+        display: none;
+    }
+
+    .pos-cart__item-total-price {
+        font-size: 0.85rem;
+    }
+
+    .pos-cart__item-controls {
+        padding: 0.2rem;
+        gap: 0.3rem;
+    }
+
+    .pos-cart__item-btn {
+        width: 24px;
+        height: 24px;
+    }
+
+    .pos-products__grid {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 0.5rem;
+        padding: 0 0.75rem 0.75rem;
+    }
+
+    .pos-products__tabs {
+        padding: 0.5rem 0.75rem;
+    }
+
+    .pos-products__tab-btn {
+        padding: 0.4rem 0.75rem;
+        font-size: 0.85rem;
+    }
+
+    .pos-products__categories-wrapper {
+        padding: 0.5rem 0.25rem;
+    }
+
+    .pos-category-btn {
+        padding: 0.4rem 0.75rem;
+        font-size: 0.75rem;
+    }
+
+    .pos-products__categories-arrow {
+        width: 32px;
+        height: 32px;
+        min-width: 32px;
+    }
+}
+
+/* Mobile (max-width: 768px) */
+@media (max-width: 768px) {
+    .pos-header {
+        padding: 0.35rem 0.5rem;
+        height: 46px;
+    }
+
+    .pos-header__brand {
+        gap: 0.4rem;
+    }
+
+    .pos-header__logo-wrapper {
+        width: 28px;
+        height: 28px;
+    }
+
+    .pos-header__nav-btn {
+        width: 30px;
+        height: 30px;
+    }
+
+    /* Masquer le profil utilisateur */
+    .pos-header__user-profile {
+        display: none;
+    }
+
+    /* Main toujours en row - pas de colonne */
+    .pos-main {
+        padding: 0.4rem;
+        gap: 0.4rem;
+    }
+
+    /* Cart compact mais à droite */
+    .pos-cart {
+        width: 220px;
+    }
+
+    .pos-cart__header {
+        padding: 0.5rem 0.75rem;
+    }
+
+    .pos-cart__title {
+        font-size: 0.9rem;
+    }
+
+    .pos-cart__items {
+        padding: 0.5rem;
+        gap: 0.4rem;
+    }
+
+    /* Layout compact: nom + prix à gauche, contrôles à droite */
+    .pos-cart__item {
+        padding: 0.5rem;
+        gap: 0.35rem;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    /* Masquer l'image sur petits écrans */
+    .pos-cart__item-image-wrapper {
+        display: none;
+    }
+
+    .pos-cart__item-details {
+        flex: 1;
+        min-width: 0;
+        flex-direction: row;
+        align-items: center;
+        gap: 0.25rem;
+        flex-wrap: wrap;
+    }
+
+    .pos-cart__item-name {
+        font-size: 0.75rem;
+        flex: 0 0 100%;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* Masquer le prix unitaire, afficher seulement le total */
+    .pos-cart__item-unit-price {
+        display: none;
+    }
+
+    .pos-cart__item-total-price {
+        font-size: 0.85rem;
+        margin-top: 0;
+    }
+
+    .pos-cart__item-controls {
+        padding: 0.15rem;
+        gap: 0.15rem;
+        border-radius: 6px;
+    }
+
+    .pos-cart__item-btn {
+        width: 20px;
+        height: 20px;
+    }
+
+    .pos-cart__item-qty {
+        font-size: 0.8rem;
+        min-width: 16px;
+    }
+
+    .pos-cart__footer {
+        padding: 0.5rem;
+    }
+
+    .pos-cart__total-amount {
+        font-size: 1.25rem;
+    }
+
+    .pos-cart__total-row {
+        margin-bottom: 0.5rem;
+    }
+
+    .pos-cart__pay-btn-large {
+        height: 42px;
+        font-size: 0.9rem;
+        gap: 0.4rem;
+    }
+
+    .pos-cart__clear-btn-large {
+        height: 42px;
+        padding: 0 0.75rem;
+    }
+
+    /* Grille de produits compacte */
+    .pos-products__grid {
+        grid-template-columns: repeat(auto-fill, minmax(95px, 1fr));
+        gap: 0.35rem;
+        padding: 0 0.5rem 0.5rem;
+    }
+
+    .pos-products__tabs {
+        padding: 0.25rem 0.5rem;
+        gap: 0.4rem;
+    }
+
+    .pos-products__tab-btn {
+        padding: 0.35rem 0.5rem;
+        font-size: 0.75rem;
+        gap: 0.2rem;
+    }
+
+    .pos-products__categories-wrapper {
+        padding: 0.4rem 0.2rem;
+    }
+
+    .pos-products__categories-arrow {
+        width: 28px;
+        height: 28px;
+        min-width: 28px;
+        font-size: 1rem;
+    }
+
+    .pos-category-btn {
+        padding: 0.3rem 0.6rem;
+        font-size: 0.7rem;
+    }
+}
+
+/* Très petit écran (max-width: 600px) */
+@media (max-width: 600px) {
+    .pos-cart {
+        width: 180px;
+    }
+
+    .pos-cart__title {
+        font-size: 0.85rem;
+    }
+
+    .pos-cart__item-image-wrapper {
+        display: none;
+    }
+
+    .pos-cart__total-amount {
+        font-size: 1.1rem;
+    }
+
+    .pos-products__grid {
+        grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+        gap: 0.3rem;
+    }
+
+    .pos-header__nav {
+        gap: 0.15rem;
+    }
+
+    .pos-header__nav-btn {
+        width: 28px;
+        height: 28px;
+    }
+}

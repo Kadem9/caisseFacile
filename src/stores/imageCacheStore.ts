@@ -42,9 +42,8 @@ export const useImageCacheStore = create<ImageCacheState>()(
                 if (typeof window === 'undefined' || !(window as any).__TAURI_INTERNALS__) return '';
 
                 const { cachedImages } = get();
-                // If already cached, we still return the local path
+                // If already cached, check if file still exists
                 if (cachedImages[serverPath]) {
-                    // Quick check if file still exists
                     if (await exists(cachedImages[serverPath])) {
                         return cachedImages[serverPath];
                     }
@@ -84,7 +83,7 @@ export const useImageCacheStore = create<ImageCacheState>()(
                     items.filter(i => i.imagePath).map(i => i.imagePath!)
                 );
 
-                console.log(`[ImageCache] Checking ${uniquePaths.size} images for cache consistency...`);
+                console.log(`[ImageCache] Checking ${uniquePaths.size} images...`);
 
                 for (const path of uniquePaths) {
                     // If path already starts with http, use it as-is, otherwise prepend API URL

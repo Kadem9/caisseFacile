@@ -12,9 +12,12 @@
     {
       "identifier": "fs:scope",
       "allow": [
+        "$APPLOCALDATA/**",
+        "$APPLOCALDATA/cached_images/**",
+        "$APPDATA/**",
         "$APPDATA/cached_images/**",
-        "$APPDATA/cached_images",
-        "$DOCUMENT/**"
+        "$DOCUMENT/**",
+        "$HOME/Library/Application Support/**"
       ]
     },
     "fs:allow-exists",

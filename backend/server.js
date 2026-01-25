@@ -1,5 +1,5 @@
 // ===================================
-// Ma Caisse AG - Backend API Server
+// CaisseFacile ASMSP - Backend API Server
 // ===================================
 
 import express from 'express';
@@ -75,12 +75,28 @@ db.exec(`
         user_id INTEGER NOT NULL,
         opened_at TEXT NOT NULL,
         closed_at TEXT,
+        initial_amount REAL DEFAULT 0,
         expected_amount REAL NOT NULL,
         actual_amount REAL,
         difference REAL,
         notes TEXT,
         synced_at TEXT DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(local_id, opened_at)
+    );
+
+    -- Cash movements table (deposits/withdrawals)
+    CREATE TABLE IF NOT EXISTS cash_movements (
+        id INTEGER PRIMARY KEY,
+        local_id INTEGER NOT NULL,
+        closure_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        type TEXT NOT NULL, -- 'withdrawal', 'deposit'
+        amount REAL NOT NULL,
+        reason TEXT,
+        created_at TEXT NOT NULL,
+        synced_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (closure_id) REFERENCES closures(id) ON DELETE CASCADE,
+        UNIQUE(local_id, created_at)
     );
 
     -- Products table (for reference/backup)
@@ -186,7 +202,7 @@ db.exec(`
     );
 `);
 
-console.log('✅ Database initialized');
+console.log('[Database] Initialized successfully');
 
 // ===================================
 // Seeding Initial Data
@@ -227,7 +243,7 @@ if (checkProducts.count === 0) {
     });
 
     insertMany(INITIAL_PRODUCTS);
-    console.log(`[Database] ✅ Seeded ${INITIAL_PRODUCTS.length} products.`);
+    console.log(`[Database] Seeded ${INITIAL_PRODUCTS.length} products.`);
 }
 
 // Seed Users
@@ -248,7 +264,7 @@ if (checkUsers.count === 0) {
         for (const u of users) insertUser.run({ ...u, now });
     });
     insertMany(INITIAL_USERS);
-    console.log(`[Database] ✅ Seeded ${INITIAL_USERS.length} users.`);
+    console.log(`[Database] Seeded ${INITIAL_USERS.length} users.`);
 }
 
 // Migration: Add columns if missing (for existing DBs)
@@ -273,13 +289,37 @@ try {
         console.log('[Migration] Added updated_at column');
     }
 
-} catch (e) {
-    console.warn('[Migration Warning]', e.message);
+
+
+    // Check and add initial_amount to closures
+    const closuresInfo = db.pragma('table_info(closures)');
+    if (!closuresInfo.some(col => col.name === 'initial_amount')) {
+        db.exec('ALTER TABLE closures ADD COLUMN initial_amount REAL DEFAULT 0');
+        console.log('[Migration] Added initial_amount column to closures');
+    }
+
+    // Check and add device_name to closures
+    if (!closuresInfo.some(col => col.name === 'device_name')) {
+        db.exec('ALTER TABLE closures ADD COLUMN device_name TEXT');
+        console.log('[Migration] Added device_name column to closures');
+    }
+
+    // Check and add device_name to cash_movements
+    const movementsInfo = db.pragma('table_info(cash_movements)');
+    if (!movementsInfo.some(col => col.name === 'device_name')) {
+        db.exec('ALTER TABLE cash_movements ADD COLUMN device_name TEXT');
+        console.log('[Migration] Added device_name column to cash_movements');
+    }
+
+} catch (error) {
+    console.error('[Migration] Error:', error);
 }
 
 // ===================================
-// Express App Setup
+// API Routes
 // ===================================
+
+// Route moved below app init
 
 const app = express();
 
@@ -326,8 +366,55 @@ app.get('/api/health', (req, res) => {
     });
 });
 
+// Activity Log Endpoint
+app.get('/api/activity', (req, res) => {
+    try {
+        const activity = db.prepare(`
+            SELECT 
+                'OUVERTURE' as type, 
+                c.opened_at as date,
+                u.name as user_name,
+                c.initial_amount as amount,
+                'Fond de caisse' as reason,
+                c.device_name,
+                c.local_id
+            FROM closures c
+            LEFT JOIN users u ON c.user_id = u.id
+            UNION ALL
+            SELECT 
+                'CLOTURE' as type, 
+                c.closed_at as date,
+                u.name as user_name,
+                c.actual_amount as amount,
+                c.notes as reason,
+                c.device_name,
+                c.local_id
+            FROM closures c
+            LEFT JOIN users u ON c.user_id = u.id
+            WHERE c.closed_at IS NOT NULL
+            UNION ALL
+            SELECT 
+                CASE WHEN m.type = 'deposit' THEN 'ENTREE' ELSE 'SORTIE' END as type,
+                m.created_at as date,
+                u.name as user_name,
+                m.amount,
+                m.reason,
+                m.device_name,
+                m.local_id
+            FROM cash_movements m
+            LEFT JOIN users u ON m.user_id = u.id
+            ORDER BY date DESC
+            LIMIT 100
+        `).all();
+        res.json(activity);
+    } catch (error) {
+        console.error('Activity log error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Serve static uploads with correct MIME types
-console.log('📂 Serving uploads from:', uploadsPath);
+console.log('[Server] Serving uploads from:', uploadsPath);
 app.use('/uploads', express.static(uploadsPath, {
     setHeaders: (res, filePath) => {
         if (filePath.endsWith('.avif')) {
@@ -468,9 +555,16 @@ app.post('/api/sync/closures', (req, res) => {
         }
 
         const insert = db.prepare(`
-            INSERT OR REPLACE INTO closures 
-            (local_id, user_id, opened_at, closed_at, expected_amount, actual_amount, difference, notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO closures 
+            (local_id, user_id, opened_at, closed_at, expected_amount, actual_amount, difference, notes, initial_amount, device_name)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(local_id, opened_at) DO UPDATE SET
+                closed_at = excluded.closed_at,
+                expected_amount = excluded.expected_amount,
+                actual_amount = excluded.actual_amount,
+                difference = excluded.difference,
+                notes = excluded.notes,
+                device_name = excluded.device_name
         `);
 
         const insertMany = db.transaction((items) => {
@@ -483,7 +577,9 @@ app.post('/api/sync/closures', (req, res) => {
                     c.expectedAmount,
                     c.actualAmount || null,
                     c.difference || null,
-                    c.notes || null
+                    c.notes || null,
+                    c.initialAmount || 0,
+                    c.deviceName || null
                 );
             }
         });
@@ -502,6 +598,57 @@ app.post('/api/sync/closures', (req, res) => {
         });
     } catch (error) {
         console.error('Sync closures error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Sync cash movements
+app.post('/api/sync/cash-movements', (req, res) => {
+    try {
+        const { movements } = req.body;
+        if (!Array.isArray(movements)) {
+            return res.status(400).json({ error: 'Invalid movements array' });
+        }
+
+
+        const insert = db.prepare(`
+            INSERT OR REPLACE INTO cash_movements 
+            (local_id, closure_id, user_id, type, amount, reason, created_at, device_name)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+
+        // Prepare lookup for closure ID
+        const getClosureId = db.prepare('SELECT id FROM closures WHERE local_id = ?');
+
+        const insertMany = db.transaction((items) => {
+            for (const m of items) {
+                const closure = getClosureId.get(m.closureId);
+                if (closure) {
+                    insert.run(
+                        m.id,
+                        closure.id, // Map local closure ID to server closure PK
+                        m.userId,
+                        m.type,
+                        m.amount,
+                        m.reason || null,
+                        m.createdAt,
+                        m.deviceName || null
+                    );
+                } else {
+                    console.warn(`[Sync] Skipped movement ${m.id}: Closure ${m.closureId} not found`);
+                }
+            }
+        });
+
+        insertMany(movements);
+
+        res.json({
+            success: true,
+            count: movements.length,
+            message: `${movements.length} movements synchronized`
+        });
+    } catch (error) {
+        console.error('Sync cash movements error:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -1065,51 +1212,82 @@ app.get('/api/stats/daily', (req, res) => {
 // Cash Closure Endpoints
 // ===================================
 
-// Get current session data for closure
+// Get current session data (Open status, stats, etc.)
 app.get('/api/closure/current-session', (req, res) => {
     try {
-        const today = new Date().toISOString().split('T')[0];
+        // Find if there is an open closure
+        const openClosure = db.prepare('SELECT * FROM closures WHERE closed_at IS NULL ORDER BY opened_at DESC LIMIT 1').get();
 
-        // Get today's transactions
+        if (!openClosure) {
+            return res.json({ isOpen: false });
+        }
+
+        const openedAt = openClosure.opened_at;
+
+        // Get transactions since opening
         const transactions = db.prepare(`
             SELECT 
                 id, user_id as userId, total_amount as totalAmount, 
                 payment_method as paymentMethod, cash_received as cashReceived,
                 change_given as changeGiven, created_at as createdAt
             FROM transactions 
-            WHERE DATE(created_at) = ?
+            WHERE created_at >= ?
             ORDER BY created_at DESC
-        `).all(today);
+        `).all(openedAt);
 
-        // Calculate totals by payment method
+        // Get cash movements since opening (linked to this closure)
+        const movements = db.prepare(`
+            SELECT * FROM cash_movements WHERE closure_id = ? ORDER BY created_at DESC
+        `).all(openClosure.id);
+
+        // Calculate totals
         let totalCash = 0;
         let totalCard = 0;
         let totalMixed = 0;
-        let transactionCount = transactions.length;
 
         transactions.forEach(t => {
             const amount = t.totalAmount;
-            if (t.paymentMethod === 'cash') {
-                totalCash += amount;
-            } else if (t.paymentMethod === 'card') {
-                totalCard += amount;
-            } else if (t.paymentMethod === 'mixed') {
-                totalMixed += amount;
-            }
+            if (t.paymentMethod === 'cash') totalCash += amount;
+            else if (t.paymentMethod === 'card') totalCard += amount;
+            else if (t.paymentMethod === 'mixed') totalMixed += amount;
         });
 
-        const total = totalCash + totalCard + totalMixed;
+        const totalSales = totalCash + totalCard + totalMixed;
+        const totalWithdrawals = movements
+            .filter(m => m.type === 'withdrawal')
+            .reduce((sum, m) => sum + m.amount, 0);
+        const totalDeposits = movements
+            .filter(m => m.type === 'deposit')
+            .reduce((sum, m) => sum + m.amount, 0);
+
+        // Expected cash in drawer = Initial + Cash Sales - Withdrawals + Deposits
+        // Note: Mix payments might need split if we tracked exact cash part, but usually mixed = some cash. 
+        // For simplicity, assuming mixed counts towards total but maybe not fully cash. 
+        // If we want exact cash, we need 'cash_received' - 'change_given' for all transactions? 
+        // Or just assume 'totalAmount' for cash/mixed is the revenue.
+        // Let's stick to totalCash stats provided.
+        // If mixed payment exists, we should probably check if we store the cash part. 
+        // The transaction struct has `cashReceived` but that includes change.
+        // Let's assume totalCash (from pure cash tx) + cash part of mixed? 
+        // The current aggregation logic above puts 'mixed' in 'totalMixed'. 
+        // Let's leave expected calculation to the frontend or be simple here: 
+        // Expected Cash = Initial + Sales(Cash) + Sales(Mixed??) - Withdrawals. 
+        // Ideally Mixed stores how much was cash.
 
         res.json({
-            transactionCount,
+            isOpen: true,
+            closureId: openClosure.id,
+            openedAt: openClosure.opened_at,
+            initialAmount: openClosure.initial_amount || 0,
+            transactionCount: transactions.length,
             totalCash,
             totalCard,
             totalMixed,
-            total,
-            transactions: transactions.map(t => ({
-                ...t,
-                createdAt: new Date(t.createdAt)
-            }))
+            totalSales,
+            totalWithdrawals,
+            totalDeposits,
+            transactions: transactions.map(t => ({ ...t, createdAt: new Date(t.createdAt) })),
+            movements: movements.map(m => ({ ...m, createdAt: new Date(m.created_at) }))
         });
 
     } catch (error) {
@@ -1118,50 +1296,101 @@ app.get('/api/closure/current-session', (req, res) => {
     }
 });
 
-// Save closure
-app.post('/api/closures', (req, res) => {
+// Open a new closure session
+app.post('/api/closures/open', (req, res) => {
     try {
-        const { userId, expectedAmount, actualAmount, notes } = req.body;
+        const { userId, initialAmount } = req.body;
 
-        if (!userId || expectedAmount === undefined || actualAmount === undefined) {
-            return res.status(400).json({ error: 'Missing required fields' });
+        if (!userId || initialAmount === undefined) {
+            return res.status(400).json({ error: 'Missing defined fields (userId, initialAmount)' });
+        }
+
+        // Check if already open
+        const openClosure = db.prepare('SELECT id FROM closures WHERE closed_at IS NULL').get();
+        if (openClosure) {
+            return res.status(400).json({ error: 'Une session de caisse est déjà ouverte.' });
         }
 
         const now = new Date().toISOString();
         const localId = Date.now();
+
+        const result = db.prepare(`
+            INSERT INTO closures (local_id, user_id, opened_at, initial_amount, expected_amount)
+            VALUES (?, ?, ?, ?, ?)
+        `).run(localId, userId, now, initialAmount, 0); // expected_amount init 0, updated at close
+
+        res.json({ success: true, id: result.lastInsertRowid, message: 'Caisse ouverte' });
+    } catch (error) {
+        console.error('Open closure error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Close a closure session
+app.post('/api/closures/close', (req, res) => {
+    try {
+        const { userId, actualAmount, notes } = req.body;
+        // We calculate expectedAmount server-side or trust client? 
+        // Better server-side for integrity, but client has the view. 
+        // Let's recalculate expected here to be safe, or just take what client gives if simpler.
+        // Let's trust client for expectedAmount mostly, BUT we should store what we think too?
+        // The DB has 'expected_amount'. Let's accept it from body or calc it. 
+        // To allow client full control (since they see the logic), let's accept `expectedAmount` from body too.
+
+        const { expectedAmount } = req.body;
+
+        if (!userId || actualAmount === undefined) {
+            return res.status(400).json({ error: 'Missing fields' });
+        }
+
+        const openClosure = db.prepare('SELECT * FROM closures WHERE closed_at IS NULL').get();
+        if (!openClosure) {
+            return res.status(400).json({ error: 'Aucune session ouverte à clôturer.' });
+        }
+
+        const now = new Date().toISOString();
         const difference = actualAmount - expectedAmount;
 
-        // Insert closure
         db.prepare(`
-            INSERT INTO closures 
-            (local_id, user_id, opened_at, closed_at, expected_amount, actual_amount, difference, notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(
-            localId,
-            userId,
-            now, // For simplicity, using same timestamp for opened_at
-            now,
-            expectedAmount,
-            actualAmount,
-            difference,
-            notes || null
-        );
+            UPDATE closures 
+            SET closed_at = ?, expected_amount = ?, actual_amount = ?, difference = ?, notes = ?
+            WHERE id = ?
+        `).run(now, expectedAmount, actualAmount, difference, notes || null, openClosure.id);
 
-        res.json({
-            success: true,
-            closure: {
-                id: localId,
-                userId,
-                expectedAmount,
-                actualAmount,
-                difference,
-                notes,
-                closedAt: now
-            }
-        });
+        res.json({ success: true, message: 'Caisse clôturée' });
 
     } catch (error) {
-        console.error('Save closure error:', error);
+        console.error('Close closure error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Add cash movement (Withdrawal/Deposit)
+app.post('/api/cash-movements', (req, res) => {
+    try {
+        const { userId, type, amount, reason } = req.body;
+
+        if (!userId || !type || !amount) {
+            return res.status(400).json({ error: 'Missing fields' });
+        }
+
+        const openClosure = db.prepare('SELECT id FROM closures WHERE closed_at IS NULL').get();
+        if (!openClosure) {
+            return res.status(400).json({ error: 'Aucune caisse ouverte.' });
+        }
+
+        const now = new Date().toISOString();
+        const localId = Date.now();
+
+        db.prepare(`
+            INSERT INTO cash_movements (local_id, closure_id, user_id, type, amount, reason, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(localId, openClosure.id, userId, type, amount, reason || null, now);
+
+        res.json({ success: true, message: 'Mouvement enregistré' });
+
+    } catch (error) {
+        console.error('Cash movement error:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -1211,10 +1440,33 @@ app.get('/api/transactions', (req, res) => {
 
         const transactions = db.prepare(query).all(...params);
 
+        // Get all products for name resolution
+        const products = db.prepare('SELECT id, local_id, name, price FROM products').all();
+        const productMap = {};
+        products.forEach(p => {
+            productMap[p.id] = p;
+            productMap[p.local_id] = p;
+        });
+
+        // Resolve product names in items
+        const resolveItems = (items) => {
+            if (!items) return [];
+            const parsed = typeof items === 'string' ? JSON.parse(items) : items;
+            return parsed.map(item => {
+                const productId = item.product?.id || item.product?.localId || item.productId || item.id;
+                const product = productMap[productId];
+                return {
+                    name: product?.name || item.name || item.productName || 'Produit inconnu',
+                    quantity: item.quantity || 1,
+                    price: product?.price || item.price || 0
+                };
+            });
+        };
+
         res.json({
             transactions: transactions.map(t => ({
                 ...t,
-                items: t.items ? JSON.parse(t.items) : [],
+                items: resolveItems(t.items),
                 createdAt: new Date(t.createdAt)
             })),
             count: transactions.length
@@ -1516,7 +1768,7 @@ app.get('/dashboard', (req, res) => {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ma Caisse AG - Dashboard</title>
+    <title>CaisseFacile ASMSP - Dashboard</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -1561,6 +1813,10 @@ app.get('/dashboard', (req, res) => {
         .badge { padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; }
         .badge.cash { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
         .badge.card { background: rgba(139, 92, 246, 0.2); color: #8b5cf6; }
+        .badge.start { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+        .badge.end { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+        .badge.in { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
+        .badge.out { background: rgba(249, 115, 22, 0.2); color: #f97316; }
         .refresh-btn {
             background: rgba(59, 130, 246, 0.2);
             border: 1px solid rgba(59, 130, 246, 0.3);
@@ -1581,7 +1837,7 @@ app.get('/dashboard', (req, res) => {
 <body>
     <div class="container">
         <header>
-            <h1>⚽ Ma Caisse AG - Dashboard</h1>
+            <h1>CaisseFacile ASMSP - Dashboard</h1>
             <div style="display: flex; gap: 1rem; align-items: center;">
                 <span class="status online" id="status">● En ligne</span>
                 <button class="refresh-btn" onclick="loadData()">↻ Actualiser</button>
@@ -1590,41 +1846,88 @@ app.get('/dashboard', (req, res) => {
 
         <div class="stats-grid" id="stats">
             <div class="stat-card">
-                <h3>💰 CA Aujourd'hui</h3>
+                <h3>CA Aujourd'hui</h3>
                 <div class="value" id="today-sales">--</div>
                 <div class="sub" id="today-count">-- transactions</div>
             </div>
             <div class="stat-card">
-                <h3>📊 CA Semaine</h3>
+                <h3>CA Semaine</h3>
                 <div class="value" id="week-sales">--</div>
                 <div class="sub" id="week-count">-- transactions</div>
             </div>
             <div class="stat-card">
-                <h3>📅 CA Mois</h3>
+                <h3>CA Mois</h3>
                 <div class="value" id="month-sales">--</div>
                 <div class="sub" id="month-count">-- transactions</div>
             </div>
             <div class="stat-card">
-                <h3>💵 Espèces (Aujourd'hui)</h3>
+                <h3>Espèces (Aujourd'hui)</h3>
                 <div class="value" id="today-cash">--</div>
             </div>
         </div>
 
         <div class="section">
-            <h2>🧾 Dernières Transactions</h2>
+            <h2>Transactions</h2>
+            <div class="filters" style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: flex-end;">
+                <div class="filter-group">
+                    <label style="display: block; font-size: 0.75rem; color: #94a3b8; margin-bottom: 0.25rem;">Date début</label>
+                    <input type="date" id="filter-start-date" style="padding: 0.5rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: #e2e8f0;">
+                </div>
+                <div class="filter-group">
+                    <label style="display: block; font-size: 0.75rem; color: #94a3b8; margin-bottom: 0.25rem;">Date fin</label>
+                    <input type="date" id="filter-end-date" style="padding: 0.5rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: #e2e8f0;">
+                </div>
+                <div class="filter-group">
+                    <label style="display: block; font-size: 0.75rem; color: #94a3b8; margin-bottom: 0.25rem;">Paiement</label>
+                    <select id="filter-payment" style="padding: 0.5rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: #e2e8f0;">
+                        <option value="">Tous</option>
+                        <option value="cash">Espèces</option>
+                        <option value="card">Carte</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label style="display: block; font-size: 0.75rem; color: #94a3b8; margin-bottom: 0.25rem;">Produit</label>
+                    <input type="text" id="filter-product" placeholder="Rechercher..." style="padding: 0.5rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: #e2e8f0;">
+                </div>
+                <button class="refresh-btn" onclick="applyFilters()" style="height: 38px;">Filtrer</button>
+                <button class="refresh-btn" onclick="resetFilters()" style="height: 38px; background: rgba(100,116,139,0.2); border-color: rgba(100,116,139,0.3); color: #94a3b8;">Réinitialiser</button>
+            </div>
             <table>
                 <thead>
                     <tr>
                         <th>#</th>
                         <th>Date</th>
+                        <th>Produits</th>
                         <th>Montant</th>
                         <th>Paiement</th>
                     </tr>
                 </thead>
                 <tbody id="transactions-table">
-                    <tr><td colspan="4" style="text-align:center;">Chargement...</td></tr>
+                    <tr><td colspan="5" style="text-align:center;">Chargement...</td></tr>
                 </tbody>
             </table>
+        </div>
+        
+        <div class="section">
+            <h2>Journal de Caisse</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Utilisateur</th>
+                        <th>Caisse</th>
+                        <th>Type</th>
+                        <th>Montant</th>
+                        <th>Motif</th>
+                    </tr>
+                </thead>
+                <tbody id="activity-table">
+                    <tr><td colspan="6" style="text-align:center;">Chargement...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
+            <a href="/z-caisse" class="refresh-btn" style="text-decoration: none; display: inline-block;">Rapport Z de Caisse</a>
         </div>
     </div>
 
@@ -1640,7 +1943,20 @@ app.get('/dashboard', (req, res) => {
             });
         }
 
-        async function loadData() {
+        function formatItems(items) {
+            if (!items || !Array.isArray(items) || items.length === 0) {
+                return '<span style="color:#64748b;">-</span>';
+            }
+            return items.map(item => {
+                const name = item.name || item.productName || 'Produit';
+                const qty = item.quantity || 1;
+                return qty > 1 ? name + ' ×' + qty : name;
+            }).join(', ');
+        }
+
+        let allTransactions = [];
+
+        async function loadData(filters = {}) {
             try {
                 const statsRes = await fetch('/api/stats');
                 const stats = await statsRes.json();
@@ -1653,23 +1969,21 @@ app.get('/dashboard', (req, res) => {
                 document.getElementById('month-sales').textContent = formatPrice(stats.month.total_sales);
                 document.getElementById('month-count').textContent = stats.month.transaction_count + ' transactions';
 
-                const txRes = await fetch('/api/transactions?limit=20');
-                const result = await txRes.json();
-                const transactions = result.transactions || [];
+                let apiUrl = '/api/transactions?limit=100';
+                if (filters.startDate) apiUrl += '&startDate=' + filters.startDate;
+                if (filters.endDate) apiUrl += '&endDate=' + filters.endDate;
 
-                const tbody = document.getElementById('transactions-table');
-                if (transactions.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#64748b;">Aucune transaction</td></tr>';
-                } else {
-                    tbody.innerHTML = transactions.map(tx => \`
-                        <tr>
-                            <td>#\${tx.localId || tx.local_id}</td>
-                            <td>\${formatDate(tx.createdAt || tx.created_at)}</td>
-                            <td class="amount">\${formatPrice(tx.totalAmount || tx.total_amount)}</td>
-                            <td><span class="badge \${tx.paymentMethod || tx.payment_method}">\${(tx.paymentMethod || tx.payment_method) === 'cash' ? 'Espèces' : 'Carte'}</span></td>
-                        </tr>
-                    \`).join('');
-                }
+                const txRes = await fetch(apiUrl);
+                const result = await txRes.json();
+                allTransactions = result.transactions || [];
+
+                renderTransactions(filters);
+
+                // Load activity
+                const activityRes = await fetch('/api/activity');
+                const activityItems = await activityRes.json();
+                renderActivity(activityItems);
+
             } catch (err) {
                 console.error('Error loading data:', err);
                 document.getElementById('status').className = 'status';
@@ -1677,8 +1991,853 @@ app.get('/dashboard', (req, res) => {
             }
         }
 
+        function renderTransactions(filters = {}) {
+            let transactions = [...allTransactions];
+
+            // Filter by payment method
+            if (filters.paymentMethod) {
+                transactions = transactions.filter(tx => 
+                    (tx.paymentMethod || tx.payment_method) === filters.paymentMethod
+                );
+            }
+
+            // Filter by product name
+            if (filters.productSearch) {
+                const search = filters.productSearch.toLowerCase();
+                transactions = transactions.filter(tx => {
+                    const items = tx.items || [];
+                    return items.some(item => {
+                        const name = (item.name || item.productName || '').toLowerCase();
+                        return name.includes(search);
+                    });
+                });
+            }
+
+            const tbody = document.getElementById('transactions-table');
+            if (transactions.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#64748b;">Aucune transaction</td></tr>';
+            } else {
+                tbody.innerHTML = transactions.map(tx => \`
+                    <tr>
+                        <td>#\${tx.localId || tx.local_id}</td>
+                        <td>\${formatDate(tx.createdAt || tx.created_at)}</td>
+                        <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">\${formatItems(tx.items)}</td>
+                        <td class="amount">\${formatPrice(tx.totalAmount || tx.total_amount)}</td>
+                        <td><span class="badge \${tx.paymentMethod || tx.payment_method}">\${(tx.paymentMethod || tx.payment_method) === 'cash' ? 'Espèces' : 'Carte'}</span></td>
+                    </tr>
+                \`).join('');
+            }
+        }
+
+        function renderActivity(items) {
+            const tbody = document.getElementById('activity-table');
+            if (!items || !Array.isArray(items) || items.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#64748b;">Aucune activité</td></tr>';
+                return;
+            }
+            tbody.innerHTML = items.map(item => {
+                let badgeClass = 'badge';
+                if (item.type === 'OUVERTURE') badgeClass += ' start';
+                else if (item.type === 'CLOTURE') badgeClass += ' end';
+                else if (item.type === 'ENTREE') badgeClass += ' in';
+                else if (item.type === 'SORTIE') badgeClass += ' out';
+
+                return \`
+                    <tr>
+                        <td>\${formatDate(item.date)}</td>
+                        <td>\${item.user_name || '-'}</td>
+                        <td>\${item.device_name ? '🖥️ ' + item.device_name : 'Poste Local'}</td>
+                        <td><span class="\${badgeClass}">\${item.type}</span></td>
+                        <td class="amount">\${formatPrice(item.amount)}</td>
+                        <td style="color: #cbd5e1; font-style: italic;">\${item.reason || ''}</td>
+                    </tr>
+                \`;
+            }).join('');
+        }
+
+        function applyFilters() {
+            const filters = {
+                startDate: document.getElementById('filter-start-date').value,
+                endDate: document.getElementById('filter-end-date').value,
+                paymentMethod: document.getElementById('filter-payment').value,
+                productSearch: document.getElementById('filter-product').value
+            };
+            loadData(filters);
+        }
+
+        function resetFilters() {
+            document.getElementById('filter-start-date').value = '';
+            document.getElementById('filter-end-date').value = '';
+            document.getElementById('filter-payment').value = '';
+            document.getElementById('filter-product').value = '';
+            loadData();
+        }
+
         loadData();
-        setInterval(loadData, 30000);
+        setInterval(() => loadData(), 30000);
+    </script>
+</body>
+</html>`);
+});
+
+// ===================================
+// Z de Caisse (Cash Closure Report)
+// ===================================
+
+// API endpoint for Z de Caisse data
+app.get('/api/z-caisse', (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+
+        if (!startDate) {
+            return res.status(400).json({ error: 'startDate is required' });
+        }
+
+        const effectiveEndDate = endDate || startDate;
+
+        // Get transactions for the period
+        const transactions = db.prepare(`
+            SELECT 
+                id, local_id as localId, user_id as userId, 
+                total_amount as totalAmount, payment_method as paymentMethod,
+                cash_received as cashReceived, change_given as changeGiven,
+                items,
+                created_at as createdAt
+            FROM transactions
+            WHERE DATE(created_at) >= ? AND DATE(created_at) <= ?
+            ORDER BY created_at DESC
+        `).all(startDate, effectiveEndDate);
+
+        // Get all products for name resolution
+        const products = db.prepare('SELECT id, local_id, name, price FROM products').all();
+        const productMap = {};
+        products.forEach(p => {
+            productMap[p.id] = p;
+            productMap[p.local_id] = p;
+        });
+
+        // Resolve product names in items
+        const resolveItems = (items) => {
+            if (!items) return [];
+            const parsed = typeof items === 'string' ? JSON.parse(items) : items;
+            return parsed.map(item => {
+                const productId = item.product?.id || item.product?.localId || item.productId || item.id;
+                const product = productMap[productId];
+                return {
+                    name: product?.name || item.name || item.productName || 'Produit inconnu',
+                    quantity: item.quantity || 1,
+                    price: product?.price || item.price || 0
+                };
+            });
+        };
+
+        // Calculate totals
+        let totalCash = 0;
+        let totalCard = 0;
+        let totalMixed = 0;
+        let countCash = 0;
+        let countCard = 0;
+        let countMixed = 0;
+
+        transactions.forEach(t => {
+            const amount = t.totalAmount;
+            if (t.paymentMethod === 'cash') {
+                totalCash += amount;
+                countCash++;
+            } else if (t.paymentMethod === 'card') {
+                totalCard += amount;
+                countCard++;
+            } else if (t.paymentMethod === 'mixed') {
+                totalMixed += amount;
+                countMixed++;
+            }
+        });
+
+        const total = totalCash + totalCard + totalMixed;
+
+        // Build product summary
+        const productSummary = {};
+        transactions.forEach(t => {
+            const items = resolveItems(t.items);
+            items.forEach(item => {
+                const name = item.name;
+                const qty = item.quantity || 1;
+                const price = item.price || 0;
+                if (!productSummary[name]) {
+                    productSummary[name] = { quantity: 0, total: 0 };
+                }
+                productSummary[name].quantity += qty;
+                productSummary[name].total += price * qty;
+            });
+        });
+
+        res.json({
+            period: { startDate, endDate: effectiveEndDate },
+            summary: {
+                transactionCount: transactions.length,
+                totalCash,
+                totalCard,
+                totalMixed,
+                total,
+                countCash,
+                countCard,
+                countMixed
+            },
+            productSummary: Object.entries(productSummary).map(([name, data]) => ({
+                name,
+                quantity: data.quantity,
+                total: data.total
+            })).sort((a, b) => b.quantity - a.quantity),
+            transactions: transactions.map(t => ({
+                ...t,
+                items: resolveItems(t.items),
+                createdAt: new Date(t.createdAt)
+            })),
+            activity: (() => {
+                try {
+                    return db.prepare(`
+                    SELECT 
+                        'OUVERTURE' as type, 
+                        c.opened_at as date,
+                        u.name as user_name,
+                        c.initial_amount as amount,
+                        'Fond de caisse' as reason,
+                        c.device_name
+                    FROM closures c
+                    LEFT JOIN users u ON c.user_id = u.id
+                    WHERE DATE(c.opened_at) >= ? AND DATE(c.opened_at) <= ?
+                    UNION ALL
+                    SELECT 
+                        'CLOTURE' as type, 
+                        c.closed_at as date,
+                        u.name as user_name,
+                        c.actual_amount as amount,
+                        c.notes as reason,
+                        c.device_name
+                    FROM closures c
+                    LEFT JOIN users u ON c.user_id = u.id
+                    WHERE c.closed_at IS NOT NULL AND DATE(c.closed_at) >= ? AND DATE(c.closed_at) <= ?
+                    UNION ALL
+                    SELECT 
+                        CASE WHEN m.type = 'deposit' THEN 'ENTREE' ELSE 'SORTIE' END as type,
+                        m.created_at as date,
+                        u.name as user_name,
+                        m.amount,
+                        m.reason,
+                        m.device_name
+                    FROM cash_movements m
+                    LEFT JOIN users u ON m.user_id = u.id
+                    WHERE DATE(m.created_at) >= ? AND DATE(m.created_at) <= ?
+                    ORDER BY date DESC
+                `).all(startDate, effectiveEndDate, startDate, effectiveEndDate, startDate, effectiveEndDate);
+                } catch (e) { console.error(e); return []; }
+            })()
+        });
+
+    } catch (error) {
+        console.error('Z de caisse error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// CSV Export endpoint
+app.get('/api/z-caisse/export/csv', (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+
+        if (!startDate) {
+            return res.status(400).json({ error: 'startDate is required' });
+        }
+
+        const effectiveEndDate = endDate || startDate;
+
+        const transactions = db.prepare(`
+            SELECT 
+                local_id as localId, 
+                total_amount as totalAmount, 
+                payment_method as paymentMethod,
+                items,
+                created_at as createdAt
+            FROM transactions
+            WHERE DATE(created_at) >= ? AND DATE(created_at) <= ?
+            ORDER BY created_at DESC
+        `).all(startDate, effectiveEndDate);
+
+        // Get all products for name resolution
+        const products = db.prepare('SELECT id, local_id, name, price FROM products').all();
+        const productMap = {};
+        products.forEach(p => {
+            productMap[p.id] = p;
+            productMap[p.local_id] = p;
+        });
+
+        // Calculate totals for CSV header
+        let totalCash = 0, totalCard = 0, totalMixed = 0;
+        const productSummaryMap = {};
+
+        transactions.forEach(t => {
+            if (t.paymentMethod === 'cash') totalCash += t.totalAmount;
+            else if (t.paymentMethod === 'card') totalCard += t.totalAmount;
+            else if (t.paymentMethod === 'mixed') totalMixed += t.totalAmount;
+
+            const items = t.items ? JSON.parse(t.items) : [];
+            items.forEach(item => {
+                const productId = item.product?.id || item.product?.localId || item.productId || item.id;
+                const product = productMap[productId];
+                const name = product?.name || item.name || item.productName || 'Produit';
+                if (!productSummaryMap[name]) productSummaryMap[name] = { qty: 0, total: 0 };
+                productSummaryMap[name].qty += (item.quantity || 1);
+                productSummaryMap[name].total += (item.price || 0) * (item.quantity || 1);
+            });
+        });
+
+        // Build CSV
+        let csv = 'RAPPORT Z DE CAISSE\n';
+        csv += `Periode;${startDate} au ${effectiveEndDate}\n\n`;
+
+        csv += 'RESUME DES VENTES\n';
+        csv += `Total Especes;${totalCash.toFixed(2)} EUR\n`;
+        csv += `Total Carte;${totalCard.toFixed(2)} EUR\n`;
+        if (totalMixed > 0) csv += `Total Mixte;${totalMixed.toFixed(2)} EUR\n`;
+        csv += `TOTAL GENERAL;${(totalCash + totalCard + totalMixed).toFixed(2)} EUR\n\n`;
+
+        csv += 'VENTES PAR PRODUIT\n';
+        csv += 'Produit;Quantite;Total\n';
+        Object.entries(productSummaryMap).sort((a, b) => b[1].qty - a[1].qty).forEach(([name, data]) => {
+            csv += `${name};${data.qty};${data.total.toFixed(2)}\n`;
+        });
+
+        csv += '\nDETAIL DES TRANSACTIONS\n';
+        csv += 'N°;Date;Produits;Montant;Paiement\n';
+        transactions.forEach(t => {
+            const items = t.items ? JSON.parse(t.items) : [];
+            const productsStr = items.map(i => {
+                const productId = i.product?.id || i.product?.localId || i.productId || i.id;
+                const product = productMap[productId];
+                const name = product?.name || i.name || i.productName || 'Produit';
+                const qty = i.quantity || 1;
+                return qty > 1 ? `${name} x${qty}` : name;
+            }).join(', ');
+            const payment = t.paymentMethod === 'cash' ? 'Espèces' :
+                t.paymentMethod === 'card' ? 'Carte' : 'Mixte';
+            csv += `${t.localId};${t.createdAt};${productsStr};${t.totalAmount.toFixed(2)};${payment}\n`;
+        });
+
+        // Append Activity Log
+        csv += '\n\nJOURNAL DE CAISSE\n';
+        csv += 'Date;Utilisateur;Caisse;Type;Montant;Motif\n';
+
+        const activity = db.prepare(`
+            SELECT 
+                'OUVERTURE' as type, 
+                c.opened_at as date,
+                u.name as user_name,
+                c.initial_amount as amount,
+                'Fond de caisse' as reason,
+                c.device_name
+            FROM closures c
+            LEFT JOIN users u ON c.user_id = u.id
+            WHERE DATE(c.opened_at) >= ? AND DATE(c.opened_at) <= ?
+            UNION ALL
+            SELECT 
+                'CLOTURE' as type, 
+                c.closed_at as date,
+                u.name as user_name,
+                c.actual_amount as amount,
+                c.notes as reason,
+                c.device_name
+            FROM closures c
+            LEFT JOIN users u ON c.user_id = u.id
+            WHERE c.closed_at IS NOT NULL AND DATE(c.closed_at) >= ? AND DATE(c.closed_at) <= ?
+            UNION ALL
+            SELECT 
+                CASE WHEN m.type = 'deposit' THEN 'ENTREE' ELSE 'SORTIE' END as type,
+                m.created_at as date,
+                u.name as user_name,
+                m.amount,
+                m.reason,
+                m.device_name
+            FROM cash_movements m
+            LEFT JOIN users u ON m.user_id = u.id
+            WHERE DATE(m.created_at) >= ? AND DATE(m.created_at) <= ?
+            ORDER BY date DESC
+        `).all(startDate, effectiveEndDate, startDate, effectiveEndDate, startDate, effectiveEndDate);
+
+        activity.forEach(a => {
+            csv += `${a.date};${a.user_name || '-'};${a.device_name || '-'};${a.type};${(a.amount || 0).toFixed(2)};${a.reason || '-'}\n`;
+        });
+
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="z-caisse-${startDate}-${effectiveEndDate}.csv"`);
+        res.send('\uFEFF' + csv); // BOM for Excel UTF-8
+
+    } catch (error) {
+        console.error('CSV export error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Z de Caisse page
+app.get('/z-caisse', (req, res) => {
+    res.setHeader('Content-Type', 'text/html');
+    res.send(`<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Z de Caisse - CaisseFacile ASMSP</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+            min-height: 100vh;
+            color: #e2e8f0;
+        }
+        .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        h1 { font-size: 1.75rem; }
+        h2 { font-size: 1.25rem; margin-bottom: 1rem; }
+        .back-link { color: #3b82f6; text-decoration: none; }
+        .back-link:hover { text-decoration: underline; }
+        .form-section {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        .form-row {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            align-items: flex-end;
+        }
+        .form-group { flex: 1; min-width: 150px; }
+        .form-group label {
+            display: block;
+            font-size: 0.75rem;
+            color: #94a3b8;
+            margin-bottom: 0.5rem;
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 0.75rem;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.05);
+            color: #e2e8f0;
+            font-size: 1rem;
+        }
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+        .btn-primary {
+            background: rgba(59, 130, 246, 0.8);
+            color: white;
+        }
+        .btn-primary:hover { background: rgba(59, 130, 246, 1); }
+        .btn-secondary {
+            background: rgba(16, 185, 129, 0.2);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: #10b981;
+        }
+        .btn-secondary:hover { background: rgba(16, 185, 129, 0.3); }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .stat-card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-card h3 { font-size: 0.75rem; color: #94a3b8; margin-bottom: 0.5rem; text-transform: uppercase; }
+        .stat-card .value { font-size: 1.75rem; font-weight: 700; }
+        .stat-card .count { font-size: 0.75rem; color: #64748b; margin-top: 0.25rem; }
+        .stat-card.total { background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.3); }
+        .stat-card.total .value { color: #10b981; }
+        .section { margin-bottom: 2rem; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+        th, td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        th { color: #94a3b8; font-weight: 500; font-size: 0.75rem; text-transform: uppercase; }
+        .amount { color: #10b981; font-weight: 600; }
+        .badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; }
+        .badge.cash { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+        .badge.card { background: rgba(139, 92, 246, 0.2); color: #8b5cf6; }
+        .export-btns { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+        .hidden { display: none; }
+        @media print {
+            body { background: white; color: black; }
+            .no-print { display: none; }
+            .stat-card { border: 1px solid #ccc; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="no-print">
+            <h1>Rapport Z de Caisse</h1>
+            <a href="/dashboard" class="back-link">Retour au Dashboard</a>
+        </header>
+
+        <div class="form-section no-print">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Type de rapport</label>
+                    <select id="report-type" onchange="toggleDateFields()">
+                        <option value="single">Jour unique</option>
+                        <option value="range">Plage de dates</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Date</label>
+                    <input type="date" id="single-date">
+                </div>
+                <div class="form-group hidden" id="end-date-group">
+                    <label>Date fin</label>
+                    <input type="date" id="end-date">
+                </div>
+                <div class="form-group" style="flex: 0;">
+                    <label>&nbsp;</label>
+                    <button class="btn btn-primary" onclick="generateReport()">Generer le rapport</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="report-content" class="hidden">
+            <div class="export-btns no-print">
+                <button class="btn btn-secondary" onclick="exportPDF()">Exporter PDF</button>
+                <button class="btn btn-secondary" onclick="exportExcel()">Exporter Excel</button>
+            </div>
+
+            <div id="report-header" style="margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                <h2 style="margin-bottom: 0.5rem;">CaisseFacile ASMSP - Rapport Z</h2>
+                <p style="color: #94a3b8;" id="report-period"></p>
+            </div>
+
+            <div class="stats-grid" id="stats-summary"></div>
+
+            <div class="section">
+                <h2>Ventes par Produit</h2>
+                <table id="products-table">
+                    <thead>
+                        <tr>
+                            <th>Produit</th>
+                            <th>Quantite</th>
+                            <th>Total</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+
+            <div class="section">
+                <h2>Detail des Transactions</h2>
+                <table id="transactions-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Date</th>
+                            <th>Produits</th>
+                            <th>Montant</th>
+                            <th>Paiement</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+
+            <div class="section">
+                <h2>Journal de Caisse</h2>
+                <table id="activity-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Utilisateur</th>
+                            <th>Caisse</th>
+                            <th>Type</th>
+                            <th>Montant</th>
+                            <th>Motif</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let reportData = null;
+        let currentStartDate = '';
+        let currentEndDate = '';
+
+        // Set default date to today
+        document.getElementById('single-date').value = new Date().toISOString().split('T')[0];
+
+        function toggleDateFields() {
+            const type = document.getElementById('report-type').value;
+            const endGroup = document.getElementById('end-date-group');
+            if (type === 'range') {
+                endGroup.classList.remove('hidden');
+            } else {
+                endGroup.classList.add('hidden');
+            }
+        }
+
+        function formatPrice(n) {
+            return (n || 0).toFixed(2).replace('.', ',') + ' EUR';
+        }
+
+        function formatDate(d) {
+            return new Date(d).toLocaleString('fr-FR', {
+                day: '2-digit', month: '2-digit', year: '2-digit',
+                hour: '2-digit', minute: '2-digit'
+            });
+        }
+
+        function formatItems(items) {
+            if (!items || !Array.isArray(items) || items.length === 0) {
+                return '-';
+            }
+            return items.map(item => {
+                const name = item.name || item.productName || 'Produit';
+                const qty = item.quantity || 1;
+                return qty > 1 ? name + ' x' + qty : name;
+            }).join(', ');
+        }
+
+        async function generateReport() {
+            const type = document.getElementById('report-type').value;
+            currentStartDate = document.getElementById('single-date').value;
+            currentEndDate = type === 'range' ? document.getElementById('end-date').value : currentStartDate;
+
+            if (!currentStartDate) {
+                alert('Veuillez selectionner une date');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/z-caisse?startDate=' + currentStartDate + '&endDate=' + currentEndDate);
+                reportData = await res.json();
+
+                if (reportData.error) {
+                    alert('Erreur: ' + reportData.error);
+                    return;
+                }
+
+                // Show report
+                document.getElementById('report-content').classList.remove('hidden');
+
+                // Period text
+                const periodText = currentStartDate === currentEndDate 
+                    ? 'Journee du ' + new Date(currentStartDate).toLocaleDateString('fr-FR')
+                    : 'Du ' + new Date(currentStartDate).toLocaleDateString('fr-FR') + ' au ' + new Date(currentEndDate).toLocaleDateString('fr-FR');
+                document.getElementById('report-period').textContent = periodText;
+
+                // Stats summary
+                const s = reportData.summary;
+                document.getElementById('stats-summary').innerHTML = 
+                    '<div class="stat-card"><h3>Transactions</h3><div class="value">' + s.transactionCount + '</div></div>' +
+                    '<div class="stat-card"><h3>Especes</h3><div class="value">' + formatPrice(s.totalCash) + '</div><div class="count">' + s.countCash + ' transactions</div></div>' +
+                    '<div class="stat-card"><h3>Carte</h3><div class="value">' + formatPrice(s.totalCard) + '</div><div class="count">' + s.countCard + ' transactions</div></div>' +
+                    (s.countMixed > 0 ? '<div class="stat-card"><h3>Mixte</h3><div class="value">' + formatPrice(s.totalMixed) + '</div><div class="count">' + s.countMixed + ' transactions</div></div>' : '') +
+                    '<div class="stat-card total"><h3>Total</h3><div class="value">' + formatPrice(s.total) + '</div></div>';
+
+                // Products table
+                const productsBody = document.querySelector('#products-table tbody');
+                if (reportData.productSummary.length === 0) {
+                    productsBody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#64748b;">Aucun produit</td></tr>';
+                } else {
+                    productsBody.innerHTML = reportData.productSummary.map(p => 
+                        '<tr><td>' + p.name + '</td><td>' + p.quantity + '</td><td class="amount">' + formatPrice(p.total) + '</td></tr>'
+                    ).join('');
+                }
+
+                // Transactions table
+                const txBody = document.querySelector('#transactions-table tbody');
+                if (reportData.transactions.length === 0) {
+                    txBody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#64748b;">Aucune transaction</td></tr>';
+                } else {
+                    txBody.innerHTML = reportData.transactions.map(tx => 
+                        '<tr><td>#' + tx.localId + '</td><td>' + formatDate(tx.createdAt) + '</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + formatItems(tx.items) + '</td><td class="amount">' + formatPrice(tx.totalAmount) + '</td><td><span class="badge ' + tx.paymentMethod + '">' + (tx.paymentMethod === 'cash' ? 'Especes' : 'Carte') + '</span></td></tr>'
+                    ).join('');
+                }
+
+                // Activity table
+                const activityBody = document.querySelector('#activity-table tbody');
+                if (!reportData.activity || reportData.activity.length === 0) {
+                    activityBody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#64748b;">Aucune activite</td></tr>';
+                } else {
+                    activityBody.innerHTML = reportData.activity.map(a => {
+                         let badgeClass = 'badge ';
+                         if (a.type === 'OUVERTURE') badgeClass += 'cash';
+                         else if (a.type === 'CLOTURE') badgeClass += 'card';
+                         else if (a.type === 'ENTREE') badgeClass += 'card'; 
+                         else badgeClass += 'cash';
+
+                        return '<tr><td>' + formatDate(a.date) + '</td><td>' + (a.user_name || '-') + '</td><td>' + (a.device_name || '-') + '</td><td><span class="' + badgeClass + '">' + a.type + '</span></td><td class="amount">' + formatPrice(a.amount) + '</td><td>' + (a.reason || '') + '</td></tr>';
+                    }).join('');
+                }
+
+            } catch (err) {
+                console.error('Error generating report:', err);
+                alert('Erreur lors de la generation du rapport');
+            }
+        }
+
+        async function exportExcel() {
+            try {
+                const res = await fetch('/api/z-caisse/export/csv?startDate=' + currentStartDate + '&endDate=' + currentEndDate);
+                if (!res.ok) throw new Error('Network response was not ok');
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'z-caisse-' + currentStartDate + '.csv';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+            } catch (err) {
+                console.error('Export Excel error:', err);
+                alert("Erreur lors de l'export Excel");
+            }
+        }
+
+        function exportPDF() {
+            if (!reportData) return;
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            const s = reportData.summary;
+            const startDate = currentStartDate;
+            const endDate = currentEndDate;
+            const periodText = startDate === endDate 
+                ? 'Journee du ' + new Date(startDate).toLocaleDateString('fr-FR')
+                : 'Du ' + new Date(startDate).toLocaleDateString('fr-FR') + ' au ' + new Date(endDate).toLocaleDateString('fr-FR');
+
+            // Header - Colored Bar
+            doc.setFillColor(30, 41, 59); // #1e293b
+            doc.rect(0, 0, 210, 40, 'F');
+            
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(22);
+            doc.text('CaisseFacile ASMSP', 14, 15);
+            doc.setFontSize(14);
+            doc.text('RAPPORT Z DE CAISSE', 14, 25);
+            
+            doc.setFontSize(10);
+            doc.text(periodText.toUpperCase(), 14, 34);
+            doc.text('GENERE LE : ' + new Date().toLocaleString('fr-FR').toUpperCase(), 200, 34, { align: 'right' });
+
+            doc.setTextColor(0, 0, 0);
+            let y = 50;
+
+            // Summary Table
+            doc.setFontSize(14);
+            doc.text('RESUME DES VENTES', 14, y);
+            
+            doc.autoTable({
+                startY: y + 5,
+                head: [['Type', 'Nombre', 'Montant']],
+                body: [
+                    ['Ventes Especes', s.countCash, formatPrice(s.totalCash)],
+                    ['Ventes Carte', s.countCard, formatPrice(s.totalCard)],
+                    ...(s.countMixed > 0 ? [['Ventes Mixtes', s.countMixed, formatPrice(s.totalMixed)]] : []),
+                    [{ content: 'TOTAL GENERAL', styles: { fontStyle: 'bold', fillColor: [241, 245, 249] } }, 
+                     { content: s.transactionCount, styles: { fontStyle: 'bold', fillColor: [241, 245, 249] } }, 
+                     { content: formatPrice(s.total), styles: { fontStyle: 'bold', fillColor: [241, 245, 249] } }]
+                ],
+                theme: 'striped',
+                headStyles: { fillColor: [30, 41, 59] },
+                margin: { left: 14, right: 14 }
+            });
+
+            y = doc.lastAutoTable.finalY + 15;
+
+            // Products Table
+            doc.setFontSize(14);
+            doc.text('VENTES PAR PRODUIT', 14, y);
+            
+            doc.autoTable({
+                startY: y + 5,
+                head: [['Produit', 'Quantite', 'Total']],
+                body: reportData.productSummary.map(p => [p.name, p.quantity, formatPrice(p.total)]),
+                theme: 'grid',
+                headStyles: { fillColor: [30, 41, 59] },
+                margin: { left: 14, right: 14 }
+            });
+
+            y = doc.lastAutoTable.finalY + 15;
+            if (y > 240) { doc.addPage(); y = 20; }
+
+            // Transactions Table
+            doc.setFontSize(14);
+            doc.text('DETAIL DES TRANSACTIONS', 14, y);
+            
+            doc.autoTable({
+                startY: y + 5,
+                head: [['#', 'Date', 'Produits', 'Montant', 'Paiement']],
+                body: reportData.transactions.map(tx => [
+                    '#' + tx.localId,
+                    formatDate(tx.createdAt),
+                    formatItems(tx.items),
+                    formatPrice(tx.totalAmount),
+                    tx.paymentMethod === 'cash' ? 'Especes' : 'Carte'
+                ]),
+                theme: 'striped',
+                headStyles: { fillColor: [30, 41, 59] },
+                margin: { left: 14, right: 14 },
+                columnStyles: {
+                    2: { cellWidth: 80 }
+                }
+            });
+
+            y = doc.lastAutoTable.finalY + 15;
+            if (y > 240) { doc.addPage(); y = 20; }
+
+            // Activity Log Table
+            doc.setFontSize(14);
+            doc.text('JOURNAL DE CAISSE', 14, y);
+            
+            doc.autoTable({
+                startY: y + 5,
+                head: [['Date', 'Caisse', 'Type', 'Montant', 'Motif']],
+                body: (reportData.activity || []).map(a => [
+                    formatDate(a.date),
+                    a.device_name || '-',
+                    a.type,
+                    formatPrice(a.amount),
+                    a.reason || '-'
+                ]),
+                theme: 'grid',
+                headStyles: { fillColor: [30, 41, 59] },
+                margin: { left: 14, right: 14 }
+            });
+
+            const filename = 'z-caisse-' + currentStartDate + '.pdf';
+            doc.save(filename);
+        }
     </script>
 </body>
 </html>`);
@@ -1720,19 +2879,19 @@ app.post('/api/admin/clear-data', (req, res) => {
 
 app.listen(PORT, () => {
     console.log(`
-╔══════════════════════════════════════════════════╗
-║     ⚽ Ma Caisse AG - Backend Server             ║
-╠══════════════════════════════════════════════════╣
-║  API:       http://localhost:${PORT}/api          ║
-║  Dashboard: http://localhost:${PORT}/dashboard    ║
-║  Health:    http://localhost:${PORT}/api/health   ║
-╚══════════════════════════════════════════════════╝
+========================================
+  CaisseFacile ASMSP - Backend Server
+========================================
+  API:       http://localhost:${PORT}/api
+  Dashboard: http://localhost:${PORT}/dashboard
+  Health:    http://localhost:${PORT}/api/health
+========================================
     `);
 });
 
 // Graceful shutdown
 process.on('SIGINT', () => {
-    console.log('\n👋 Shutting down...');
+    console.log('\n[Server] Shutting down...');
     db.close();
     process.exit(0);
 });

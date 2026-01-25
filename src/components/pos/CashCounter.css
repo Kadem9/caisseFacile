@@ -1,0 +1,173 @@
+/* CashCounter.css - Light Theme Optimized */
+.cash-counter {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    width: 100%;
+}
+
+.cash-counter__total {
+    background: #ecfdf5;
+    /* emerald-50 */
+    border: 1px solid #d1fae5;
+    border-radius: 12px;
+    padding: 1rem 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.cash-counter__total .label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #059669;
+    /* emerald-600 */
+    font-weight: 600;
+}
+
+.cash-counter__total .value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #059669;
+}
+
+.cash-counter__grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+}
+
+.cash-counter__section h3 {
+    margin: 0 0 1rem 0;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #e2e8f0;
+    color: #64748b;
+    /* slate-500 */
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+}
+
+.cash-counter__items {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+
+.cash-counter__item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 8px;
+    background-color: #ffffff;
+    border: 1px solid transparent;
+}
+
+.cash-counter__item:hover,
+.cash-counter__item:focus-within {
+    background: #f8fafc;
+    border-color: #e2e8f0;
+}
+
+.cash-counter__item-label {
+    width: 45px;
+    font-weight: 700;
+    text-align: right;
+    font-size: 0.9rem;
+    flex: 0 0 auto;
+}
+
+.cash-counter__controls {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex: 1;
+    justify-content: center;
+}
+
+.cc-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    background: #f1f5f9;
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    user-select: none;
+}
+
+.cc-btn:active {
+    transform: scale(0.95);
+}
+
+.cc-btn--minus:hover {
+    background: #fee2e2;
+    color: #ef4444;
+    border-color: #fecaca;
+}
+
+.cc-btn--plus:hover {
+    background: #dbeafe;
+    color: #2563eb;
+    border-color: #bfdbfe;
+}
+
+.cash-counter__input {
+    width: 50px;
+    height: 36px;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 0 0.5rem;
+    color: #1e293b;
+    text-align: center;
+    font-size: 1rem;
+    font-weight: 600;
+    -moz-appearance: textfield;
+}
+
+.cash-counter__input::-webkit-outer-spin-button,
+.cash-counter__input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.cash-counter__input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+    z-index: 2;
+}
+
+.cash-counter__item-subtotal {
+    width: 70px;
+    text-align: right;
+    font-weight: 600;
+    color: #334155;
+    font-size: 0.85rem;
+    flex: 0 0 auto;
+}
+
+.cash-counter__item-label.bill {
+    color: #3b82f6;
+}
+
+.cash-counter__item-label.coin {
+    color: #f59e0b;
+}
+
+@media (max-width: 768px) {
+    .cash-counter__grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+}

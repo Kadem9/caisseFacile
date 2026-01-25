@@ -98,7 +98,7 @@ export async function checkHealth(): Promise<{ success: boolean; error?: string 
 // Sync Endpoints
 // ===================================
 
-import type { Transaction, CashClosure, Product, StockMovement, Menu, Category } from '../types';
+import type { Transaction, CashClosure, CashMovement, Product, StockMovement, Menu, Category, User } from '../types';
 import type { PaymentMethod } from '../types/database';
 
 export async function syncTransactions(transactions: Transaction[]): Promise<SyncResult> {
@@ -220,6 +220,23 @@ export async function syncUsers(users: User[]): Promise<SyncResult> {
     };
 }
 
+export async function syncCashMovements(movements: CashMovement[]): Promise<SyncResult> {
+    const result = await apiRequest<SyncResult>('/api/sync/cash-movements', {
+        method: 'POST',
+        body: JSON.stringify({ movements }),
+    });
+
+    if (result.success && result.data) {
+        return result.data;
+    }
+
+    return {
+        success: false,
+        count: 0,
+        error: result.error || 'Unknown error',
+    };
+}
+
 export async function getSyncDiff(lastSync: string): Promise<{
     ts: string;
     products: Product[];
@@ -282,12 +299,18 @@ export async function uploadImage(file: File): Promise<string> {
 // ===================================
 
 export interface CurrentSessionData {
+    isOpen: boolean;
+    initialAmount: number;
+    totalSales: number;
+    totalWithdrawals: number;
+    totalDeposits: number;
     transactionCount: number;
     totalCash: number;
     totalCard: number;
     totalMixed: number;
     total: number;
     transactions: any[];
+    movements: any[];
 }
 
 export interface ClosureData {
@@ -418,7 +441,7 @@ export const createStockMovement = async (data: {
 // User Management API
 // ===================================
 
-import type { User, UserRole } from '../types';
+import type { UserRole } from '../types';
 
 export const fetchUsers = async (): Promise<{ success: boolean; users: User[] }> => {
     const response = await fetch(`${getApiUrl()}/api/users?t=${Date.now()}`);

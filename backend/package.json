@@ -1,7 +1,7 @@
 {
     "name": "ma-caisse-backend",
     "version": "1.0.0",
-    "description": "Backend API for Ma Caisse AG POS Application",
+    "description": "Backend API for CaisseFacile ASMSP POS Application",
     "main": "server.js",
     "type": "module",
     "scripts": {

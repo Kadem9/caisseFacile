@@ -12,4 +12,5 @@ export { SettingsPage } from './SettingsPage';
 export { CategoriesPage } from './CategoriesPage';
 export { BackupPage } from './BackupPage';
 export { UsersPage } from './UsersPage';
+export { ActivityPage } from './ActivityPage';
 

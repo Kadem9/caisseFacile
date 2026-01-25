@@ -3,6 +3,7 @@
 // ===================================
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { invoke } from '@tauri-apps/api/core';
 import {
     Button,
@@ -101,6 +102,7 @@ const DEFAULT_CONFIG: HardwareConfig = {
 const BAUD_RATES = [9600, 19200, 38400, 57600, 115200];
 
 export const SettingsPage: React.FC = () => {
+    const navigate = useNavigate();
 
     // State
     const [ports, setPorts] = useState<SerialPortInfo[]>([]);
@@ -129,6 +131,9 @@ export const SettingsPage: React.FC = () => {
     const [clearDataPin, setClearDataPin] = useState('');
     const [clearDataError, setClearDataError] = useState<string | null>(null);
     const [isClearing, setIsClearing] = useState(false);
+
+    // Device Name
+    const [deviceName, setDeviceName] = useState(() => localStorage.getItem('ma-caisse-device-name') || 'Caisse Principale');
 
     // Load configuration on mount
     useEffect(() => {
@@ -359,7 +364,14 @@ export const SettingsPage: React.FC = () => {
             useClosureStore.getState().clearAllClosures();
 
             // 3. Success
-            setTestResult({ type: 'success', message: 'Toutes les données de vente ont été supprimées.' });
+            setTestResult({ type: 'success', message: 'Système réinitialisé. Redirection...' });
+
+            // Wait slightly so user sees the success message or just instant
+            setTimeout(() => {
+                navigate('/');
+                window.location.reload(); // Hard reload to ensure clean state
+            }, 1000);
+
             setShowClearDataModal(false);
             setClearDataPin('');
         } catch (err) {
@@ -743,6 +755,24 @@ export const SettingsPage: React.FC = () => {
                                     </p>
                                 </div>
 
+                                <div className="settings-form__group">
+                                    <label>Nom de ce poste (Identification Caisse)</label>
+                                    <input
+                                        type="text"
+                                        className="settings-input"
+                                        placeholder="ex: Caisse Bar"
+                                        value={deviceName}
+                                        onChange={(e) => {
+                                            setDeviceName(e.target.value);
+                                            localStorage.setItem('ma-caisse-device-name', e.target.value);
+                                        }}
+                                        style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #ccc' }}
+                                    />
+                                    <p className="settings-form__help">
+                                        Ce nom apparaitra dans le Journal de Caisse pour identifier les actions de ce poste.
+                                    </p>
+                                </div>
+
                                 {syncStatus && (
                                     <div className={`settings-alert settings-alert--${syncStatus.type}`} style={{ padding: '8px', marginBottom: '15px' }}>
                                         {syncStatus.type === 'success' ? (
@@ -765,8 +795,8 @@ export const SettingsPage: React.FC = () => {
                                 <h3 className="text-red-600 font-bold mb-2">Zone de Danger</h3>
                                 <div className="flex items-center justify-between p-4 bg-red-50 rounded-lg border border-red-100">
                                     <div>
-                                        <p className="font-medium text-red-900">Vider les données de vente</p>
-                                        <p className="text-sm text-red-700">Supprime tout l'historique des commandes et le chiffre d'affaires.</p>
+                                        <p className="font-medium text-red-900">Vider le Système</p>
+                                        <p className="text-sm text-red-700">Supprime ventes, clôtures, historiques et réinitialise l'état de la caisse.</p>
                                     </div>
                                     <Button
                                         variant="secondary"

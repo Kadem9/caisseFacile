@@ -249,7 +249,7 @@ pub fn test_printer(port_name: String, baud_rate: u32) -> Result<String, String>
     data.extend_from_slice(&escpos::INIT);
     data.extend_from_slice(&escpos::ALIGN_CENTER);
     data.extend_from_slice(&escpos::DOUBLE_SIZE_ON);
-    data.extend_from_slice(b"MA CAISSE AG");
+    data.extend_from_slice(b"CAISSEFACILE ASMSP");
     data.push(escpos::LF);
     data.extend_from_slice(&escpos::NORMAL_SIZE);
     data.push(escpos::LF);
@@ -494,7 +494,7 @@ pub fn test_printer_driver(printer_name: String) -> Result<String, String> {
     data.extend_from_slice(&escpos::INIT);
     data.extend_from_slice(&escpos::ALIGN_CENTER);
     data.extend_from_slice(&escpos::DOUBLE_SIZE_ON);
-    data.extend_from_slice(b"MA CAISSE AG");
+    data.extend_from_slice(b"CAISSEFACILE ASMSP");
     data.push(escpos::LF);
     data.extend_from_slice(&escpos::NORMAL_SIZE);
     data.push(escpos::LF);

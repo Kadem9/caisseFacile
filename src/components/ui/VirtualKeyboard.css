@@ -1,0 +1,159 @@
+/* VirtualKeyboard.css */
+.virtual-keyboard-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: flex-end;
+    /* Show at bottom */
+    justify-content: center;
+    z-index: 9999;
+}
+
+.virtual-keyboard-container {
+    background-color: #e5e7eb;
+    /* Light gray base */
+    width: 100%;
+    max-width: 900px;
+    padding: 1rem;
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.2);
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(100%);
+    }
+
+    to {
+        transform: translateY(0);
+    }
+}
+
+.virtual-keyboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding: 0 0.5rem;
+}
+
+.virtual-keyboard-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #374151;
+}
+
+.virtual-keyboard-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #6b7280;
+    padding: 0.5rem;
+    border-radius: 50%;
+}
+
+.virtual-keyboard-close:hover {
+    background-color: #d1d5db;
+    color: #111827;
+}
+
+.virtual-keyboard-display {
+    background-color: #ffffff;
+    border: 2px solid #d1d5db;
+    border-radius: 8px;
+    padding: 1rem;
+    font-size: 1.5rem;
+    margin-bottom: 1.5rem;
+    min-height: 60px;
+    display: flex;
+    align-items: center;
+    font-weight: 500;
+    color: #111827;
+}
+
+.placeholder {
+    color: #9ca3af;
+    font-style: italic;
+}
+
+.cursor {
+    animation: blink 1s infinite;
+    color: #2563eb;
+    margin-left: 2px;
+}
+
+@keyframes blink {
+    50% {
+        opacity: 0;
+    }
+}
+
+.virtual-keyboard-keys {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.keyboard-row {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.keyboard-key {
+    background-color: #ffffff;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    color: #111827;
+    font-size: 1.25rem;
+    font-weight: 600;
+    height: 56px;
+    min-width: 48px;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    transition: all 0.1s;
+}
+
+.keyboard-key:active {
+    transform: translateY(2px);
+    background-color: #f3f4f6;
+    box-shadow: none;
+}
+
+.key-space {
+    flex: 4;
+}
+
+.key-enter {
+    flex: 2;
+    background-color: #2563eb;
+    color: white;
+    border-color: #1d4ed8;
+}
+
+.key-enter:active {
+    background-color: #1d4ed8;
+}
+
+.key-backspace {
+    flex: 1.5;
+    background-color: #fee2e2;
+    color: #ef4444;
+    border-color: #fecaca;
+}
+
+.key-clear {
+    flex: 1.5;
+    font-size: 1rem;
+    background-color: #f3f4f6;
+}

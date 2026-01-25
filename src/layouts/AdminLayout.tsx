@@ -1,6 +1,6 @@
 import React from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { PackageIcon, SettingsIcon, ChartIcon, ClipboardIcon, CardIcon, BoxIcon, DownloadIcon, UserIcon } from '../components/ui';
+import { PackageIcon, SettingsIcon, ChartIcon, ClipboardIcon, CardIcon, BoxIcon, DownloadIcon, UserIcon, HistoryIcon } from '../components/ui';
 import { useAuthStore } from '../stores';
 import './AdminLayout.css';
 import logoImg from '../assets/logo-asmsp.png';
@@ -31,7 +31,7 @@ export const AdminLayout: React.FC = () => {
                             />
                         </div>
                         <div className="admin-sidebar__app-name">
-                            <h1>AS Manissieux</h1>
+                            <h1>CaisseFacile ASMSP</h1>
                             <span>Administration</span>
                         </div>
                     </div>
@@ -112,6 +112,16 @@ export const AdminLayout: React.FC = () => {
                     >
                         <CardIcon size={20} />
                         Clôtures
+                    </NavLink>
+
+                    <NavLink
+                        to="/admin/activity"
+                        className={({ isActive }) =>
+                            `admin-sidebar__link ${isActive ? 'admin-sidebar__link--active' : ''}`
+                        }
+                    >
+                        <HistoryIcon size={20} />
+                        Journal de Caisse
                     </NavLink>
 
                     <NavLink

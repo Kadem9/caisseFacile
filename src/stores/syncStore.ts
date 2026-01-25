@@ -13,6 +13,7 @@ import {
     syncCategories,
     syncUsers,
     syncStockMovements,
+    syncCashMovements,
     getApiUrl,
     setApiUrl as setApiUrlService,
     getSyncDiff,
@@ -20,18 +21,18 @@ import {
 } from '../services/api';
 import { logger } from '../services/logger';
 import { useImageCacheStore } from './imageCacheStore';
-import type { Transaction, CashClosure, Product, StockMovement, Menu, Category, User } from '../types';
+import type { Transaction, CashClosure, CashMovement, Product, StockMovement, Menu, Category, User } from '../types';
 
 // ===================================
 // Types
 // ===================================
 
-export type SyncEntityType = 'transaction' | 'closure' | 'product' | 'stock_movement' | 'menu' | 'category' | 'user';
+export type SyncEntityType = 'transaction' | 'closure' | 'cash_movement' | 'product' | 'stock_movement' | 'menu' | 'category' | 'user';
 
 export interface SyncQueueItem {
     id: string;
     type: SyncEntityType;
-    data: Transaction | CashClosure | Product | StockMovement | Menu | Category | User;
+    data: Transaction | CashClosure | CashMovement | Product | StockMovement | Menu | Category | User;
     createdAt: Date;
     retryCount: number;
     lastError?: string;
@@ -82,7 +83,7 @@ export interface SyncState {
     registerUserHandler: (handler: (users: User[]) => void) => void;
 
     // Queue management
-    addToQueue: (type: SyncEntityType, data: Transaction | CashClosure | Product | StockMovement | Menu | Category | User) => void;
+    addToQueue: (type: SyncEntityType, data: Transaction | CashClosure | CashMovement | Product | StockMovement | Menu | Category | User) => void;
     removeFromQueue: (id: string) => void;
     clearQueue: () => void;
 
@@ -306,6 +307,7 @@ export const useSyncStore = create<SyncState>()(
                     // 2. Push local changes
                     await get().syncEntity('transaction');
                     await get().syncEntity('closure');
+                    await get().syncEntity('cash_movement');
                     await get().syncEntity('product');
                     await get().syncEntity('menu');
                     await get().syncEntity('stock_movement');
@@ -343,6 +345,9 @@ export const useSyncStore = create<SyncState>()(
                             break;
                         case 'closure':
                             result = await syncClosures(items.map(i => i.data as CashClosure));
+                            break;
+                        case 'cash_movement':
+                            result = await syncCashMovements(items.map(i => i.data as CashMovement));
                             break;
                         case 'product':
                             result = await syncProducts(items.map(i => i.data as Product));

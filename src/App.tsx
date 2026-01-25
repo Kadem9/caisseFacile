@@ -3,7 +3,7 @@
 // ===================================
 
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { LoginPage, POSPage, ProductsPage, StockPage, ReportsPage, ClosurePage, SettingsPage, CategoriesPage, BackupPage, UsersPage } from './pages';
+import { LoginPage, POSPage, ProductsPage, StockPage, ReportsPage, ClosurePage, SettingsPage, CategoriesPage, BackupPage, UsersPage, ActivityPage } from './pages';
 import MenusPage from './pages/MenusPage';
 import { AdminLayout } from './layouts/AdminLayout';
 import { useAuthStore } from './stores';
@@ -138,6 +138,7 @@ function App() {
           } />
 
           <Route path="closure" element={<ClosurePage />} />
+          <Route path="activity" element={<ActivityPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="backup" element={<BackupPage />} />
           <Route path="users" element={

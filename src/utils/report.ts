@@ -161,7 +161,7 @@ function buildReportHTML(data: ReportData): string {
 </head>
 <body>
     <div class="header">
-        <h1>⚽ Ma Caisse AG</h1>
+        <h1>⚽ CaisseFacile ASMSP</h1>
         <div class="subtitle">${data.title}</div>
         ${data.subtitle ? `<div class="subtitle">${data.subtitle}</div>` : ''}
         <div class="date">Généré le ${formatDate(data.date)}</div>
@@ -175,7 +175,7 @@ function buildReportHTML(data: ReportData): string {
     `).join('')}
 
     <div class="footer">
-        Ma Caisse AG - Rapport généré automatiquement
+        CaisseFacile ASMSP - Rapport généré automatiquement
     </div>
 </body>
 </html>

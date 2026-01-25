@@ -1,0 +1,320 @@
+/* CashModals.css - Light Theme Harmony & Forced Layout */
+
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    animation: fadeIn 0.2s ease-out;
+}
+
+.modal-content {
+    background: #ffffff;
+    border-radius: 24px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    display: flex;
+    flex-direction: column;
+    animation: slideUp 0.3s ease-out;
+    border: none;
+    color: #1e293b;
+}
+
+/* Force Landscape Dimensions */
+.cash-modal {
+    width: 1200px !important;
+    max-width: 96vw !important;
+    height: 85vh !important;
+    max-height: 800px;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Force Row Layout */
+.cash-modal-body {
+    display: flex !important;
+    flex-direction: row !important;
+    padding: 1.5rem;
+    flex: 1;
+    overflow: hidden;
+    /* Prevent body scroll, let columns scroll */
+    background: #ffffff;
+}
+
+.cash-modal-column {
+    flex: 1;
+    min-width: 0;
+    /* Prevent flex overflow */
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    /* Columns scroll independently */
+    padding-right: 0.5rem;
+    scrollbar-width: none;
+    /* Firefox */
+    -ms-overflow-style: none;
+    /* IE/Edge */
+}
+
+.cash-modal-column::-webkit-scrollbar {
+    display: none;
+    /* Chrome/Safari */
+}
+
+.cash-modal-column--left {
+    border-right: 1px solid #f1f5f9;
+    padding-right: 2rem;
+}
+
+.cash-modal-column--right {
+    padding-left: 0.5rem;
+}
+
+.amount-group {
+    /* height: 100%; Removed to allow natural flow */
+    display: flex;
+    flex-direction: column;
+}
+
+.amount-group .input-wrapper {
+    margin-bottom: 0.5rem;
+    /* Very compact */
+}
+
+.custom-reason-wrapper {
+    margin-top: 0.75rem;
+    animation: fadeIn 0.2s ease-out;
+}
+
+/* Only stack on very small mobile screens */
+@media (max-width: 600px) {
+    .cash-modal {
+        height: auto !important;
+        max-height: 98vh;
+        width: 95vw !important;
+    }
+
+    .cash-modal-body {
+        flex-direction: column !important;
+        padding: 1rem;
+        gap: 1.5rem;
+        overflow-y: auto;
+    }
+
+    .cash-modal-column--left {
+        border-right: none;
+        padding-right: 0;
+        border-bottom: 1px solid #f1f5f9;
+        padding-bottom: 1.5rem;
+    }
+}
+
+/* Reused Elements */
+.closure-modal {
+    width: 1000px;
+    height: 85vh;
+}
+
+.modal-header {
+    padding: 1.5rem 2rem;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    background: #f8fafc;
+    border-radius: 24px 24px 0 0;
+}
+
+.modal-header h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+.modal-subtitle {
+    margin: 0.5rem 0 0 0;
+    color: #64748b;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 8px;
+    transition: all 0.2s;
+}
+
+.close-btn:hover {
+    background: #e2e8f0;
+    color: #0f172a;
+}
+
+.modal-footer {
+    padding: 1.5rem 2rem;
+    border-top: 1px solid #e2e8f0;
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    background: #f8fafc;
+    border-radius: 0 0 24px 24px;
+}
+
+.form-group {
+    margin-bottom: 1rem;
+    /* Reduced from 2rem */
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.75rem;
+    color: #64748b;
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.type-toggle {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    padding: 0.35rem;
+    background: #f1f5f9;
+    border-radius: 12px;
+}
+
+.type-btn {
+    padding: 1rem;
+    background: transparent;
+    border: none;
+    border-radius: 10px;
+    color: #64748b;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.type-btn:hover {
+    color: #334155;
+}
+
+.type-btn.active.withdrawal {
+    background: #ffffff;
+    color: #ef4444;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.type-btn.active.deposit {
+    background: #ffffff;
+    color: #10b981;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.input-wrapper input {
+    width: 100%;
+    background: #ffffff;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 0.75rem 3rem 0.75rem 1rem;
+    /* Reduced padding */
+    font-size: 1.75rem;
+    /* Slightly smaller */
+    font-weight: 700;
+    color: #1e293b;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.input-wrapper input:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+}
+
+.input-icon {
+    position: absolute;
+    right: 1.5rem;
+    color: #94a3b8;
+}
+
+.reasons-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.reason-btn {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 0.75rem;
+    color: #475569;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: 500;
+}
+
+.reason-btn:hover {
+    background: #f8fafc;
+    border-color: #cbd5e1;
+}
+
+.reason-btn.active {
+    background: #eff6ff;
+    border-color: #3b82f6;
+    color: #3b82f6;
+    box-shadow: 0 0 0 1px #3b82f6;
+}
+
+.custom-reason-input {
+    width: 100%;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    color: #1e293b;
+    outline: none;
+    font-size: 1rem;
+}
+
+.custom-reason-input:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
