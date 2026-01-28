@@ -394,50 +394,64 @@ export const useProductStore = create<ProductState>()(
                 });
             },
 
-            mergeServerCategories: (serverCategories: Category[]) => {
+            mergeServerCategories: (newCategories: Category[]) => {
                 set((state) => {
-                    // Server categories are the source of truth
-                    // We REPLACE local categories with server categories
-                    // Filter out deleted categories (isActive: false)
-                    const activeCategories = serverCategories.filter(cat => cat.isActive !== false);
-
-                    if (activeCategories.length === 0 && serverCategories.length > 0) {
-                        // All categories were deleted - clear local
-                        console.log('[ProductStore] All categories deleted on server');
-                        return { categories: [], lastCategoryId: state.lastCategoryId };
-                    }
-
-                    if (activeCategories.length === 0) {
-                        return {};
-                    }
-
+                    let currentCategories = [...state.categories];
                     let maxId = state.lastCategoryId;
+                    let hasChanges = false;
 
-                    // Map and track max ID
-                    const mergedCategories: Category[] = activeCategories.map((serverCat) => {
-                        if (serverCat.id > maxId) maxId = serverCat.id;
+                    newCategories.forEach(serverCat => {
+                        // Cast to any to get potential extra fields if needed, or just strict typing
+                        // Assuming newCategories matches Category type but might have server extras
+                        const catId = serverCat.id;
+                        if (catId > maxId) maxId = catId;
 
-                        return {
-                            id: serverCat.id,
+                        const index = currentCategories.findIndex(c => c.id === catId);
+
+                        // If server says category is deleted (isActive: false or not showing up in full sync? partial sync usually sends deletions as updates)
+                        // In sync diff, we expect isActive: false for deleted items.
+                        if (serverCat.isActive === false) {
+                            if (index >= 0) {
+                                console.log('[Sync Merge] Deleting category (isActive=false):', serverCat.name);
+                                currentCategories = currentCategories.filter(c => c.id !== catId);
+                                hasChanges = true;
+                            }
+                            return;
+                        }
+
+                        // Map server fields
+                        const mappedCat: Category = {
+                            id: catId,
                             name: serverCat.name,
                             color: serverCat.color || '#6b7280',
                             icon: serverCat.icon || '📦',
                             sortOrder: serverCat.sortOrder ?? 0,
                             isActive: true, // Only active categories reach here
-                            createdAt: serverCat.createdAt || new Date(),
-                            updatedAt: serverCat.updatedAt || new Date(),
+                            createdAt: new Date(serverCat.createdAt),
+                            updatedAt: new Date(serverCat.updatedAt || new Date()),
                         };
+
+                        if (index >= 0) {
+                            // Update existing
+                            currentCategories[index] = { ...currentCategories[index], ...mappedCat };
+                            hasChanges = true;
+                        } else {
+                            // Add new
+                            currentCategories.push(mappedCat);
+                            hasChanges = true;
+                        }
                     });
 
-                    // Sort by sortOrder to ensure consistent ordering across all machines
-                    mergedCategories.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
-
-                    console.log('[ProductStore] Categories synced from server:', mergedCategories.length, 'active categories');
-
-                    return {
-                        categories: mergedCategories,
-                        lastCategoryId: maxId
-                    };
+                    if (hasChanges) {
+                        // Sort by sortOrder
+                        currentCategories.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+                        console.log('[ProductStore] Categories synced/merged:', currentCategories.length);
+                        return {
+                            categories: currentCategories,
+                            lastCategoryId: maxId
+                        };
+                    }
+                    return {};
                 });
             },
         }),
