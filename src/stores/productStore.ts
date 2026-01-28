@@ -368,11 +368,18 @@ export const useProductStore = create<ProductState>()(
             mergeServerProducts: (newProducts) => {
                 set((state) => {
                     let currentProducts = [...state.products];
+                    let maxId = state.lastProductId; // Start with current max
                     let hasChanges = false;
 
                     newProducts.forEach(serverProd => {
                         const sp = serverProd as any;
                         const productId = sp.localId || sp.id;
+
+                        // Track max ID
+                        if (typeof productId === 'number' && productId > maxId) {
+                            maxId = productId;
+                        }
+
                         const index = currentProducts.findIndex(p => p.id === productId);
 
                         // If server says product is deleted (isActive: false), remove it locally
@@ -405,9 +412,14 @@ export const useProductStore = create<ProductState>()(
                     });
 
                     if (hasChanges) {
-                        return { products: currentProducts };
+                        return {
+                            products: currentProducts,
+                            lastProductId: maxId // Update lastProductId
+                        };
                     }
-                    return {};
+
+                    // Always update maxId if it increased, even if no content changed
+                    return { lastProductId: maxId };
                 });
             },
 
