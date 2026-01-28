@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useProductStore } from '../stores';
-import { PackageIcon, TrashIcon, SearchIcon, PlusIcon, AlertIcon, XIcon, CheckIcon } from '../components/ui';
+import { PackageIcon, TrashIcon, SearchIcon, PlusIcon, AlertIcon, XIcon, CheckIcon, ClipboardIcon } from '../components/ui';
 import { getProductImageUrl } from '../helpers/urlHelper';
 import type { Product, ProductCreateInput } from '../types';
 import { ask } from '@tauri-apps/plugin-dialog';
@@ -75,6 +75,21 @@ export const ProductsPage: React.FC = () => {
             stockQuantity: product.stockQuantity,
             alertThreshold: product.alertThreshold,
             imagePath: product.imagePath || '',
+            printTicket: product.printTicket ?? true
+        });
+    };
+
+    const handleDuplicate = (product: Product) => {
+        setIsCreating(true);
+        setEditingProduct(null); // Ensure we are in create mode, not edit
+        setSelectedImageFile(null);
+        setProductForm({
+            categoryId: product.categoryId,
+            name: `${product.name} (Copie)`,
+            price: product.price,
+            stockQuantity: 0, // Reset stock for new product
+            alertThreshold: product.alertThreshold,
+            imagePath: product.imagePath || '', // Keep image
             printTicket: product.printTicket ?? true
         });
     };
@@ -264,6 +279,13 @@ export const ProductsPage: React.FC = () => {
 
                                 {/* Quick Actions */}
                                 <div className="product-card__actions">
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); handleDuplicate(product); }}
+                                        className="product-card__duplicate"
+                                        title="Dupliquer"
+                                    >
+                                        <ClipboardIcon size={14} />
+                                    </button>
                                     <button
                                         onClick={(e) => { e.stopPropagation(); toggleProductActive(product.id); }}
                                         className={`product-card__toggle ${product.isActive ? 'toggle--active' : ''}`}
