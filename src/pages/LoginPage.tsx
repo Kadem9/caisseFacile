@@ -143,7 +143,17 @@ export const LoginPage: React.FC = () => {
 
     const handleMinimize = useCallback(async () => {
         try {
-            await getCurrentWindow().minimize();
+            const win = getCurrentWindow();
+            const isFullscreen = await win.isFullscreen();
+            if (isFullscreen) {
+                await win.setFullscreen(false);
+                // Need a slight delay for the window transition to complete
+                setTimeout(async () => {
+                    await win.minimize();
+                }, 100);
+            } else {
+                await win.minimize();
+            }
         } catch (err) {
             console.error('Failed to minimize window:', err);
         }
