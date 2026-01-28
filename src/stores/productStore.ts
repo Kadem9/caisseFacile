@@ -73,6 +73,7 @@ interface ProductState {
     // Sync
     mergeServerProducts: (products: Product[]) => void;
     mergeServerCategories: (categories: Category[]) => void;
+    reorderCategory: (id: number, direction: 'up' | 'down') => void;
 }
 
 import { uploadImage } from '../services/api';
@@ -289,18 +290,26 @@ export const useProductStore = create<ProductState>()(
 
             // Stock Actions
             updateStock: (productId, quantity) => {
-                set((state) => ({
-                    products: state.products.map((p) =>
+                set((state) => {
+                    const products = state.products.map((p) =>
                         p.id === productId
                             ? { ...p, stockQuantity: quantity, updatedAt: new Date() }
                             : p
-                    ),
-                }));
+                    );
+
+                    const updatedProduct = products.find(p => p.id === productId);
+                    if (updatedProduct) {
+                        useSyncStore.getState().addToQueue('product', updatedProduct);
+                        useSyncStore.getState().syncAll().catch(console.error);
+                    }
+
+                    return { products };
+                });
             },
 
             decrementStock: (productId, quantity) => {
-                set((state) => ({
-                    products: state.products.map((p) =>
+                set((state) => {
+                    const products = state.products.map((p) =>
                         p.id === productId
                             ? {
                                 ...p,
@@ -308,8 +317,16 @@ export const useProductStore = create<ProductState>()(
                                 updatedAt: new Date(),
                             }
                             : p
-                    ),
-                }));
+                    );
+
+                    const updatedProduct = products.find(p => p.id === productId);
+                    if (updatedProduct) {
+                        useSyncStore.getState().addToQueue('product', updatedProduct);
+                        useSyncStore.getState().syncAll().catch(console.error);
+                    }
+
+                    return { products };
+                });
             },
 
             // Getters
@@ -452,6 +469,51 @@ export const useProductStore = create<ProductState>()(
                         };
                     }
                     return {};
+                });
+            },
+
+            reorderCategory: (id: number, direction: 'up' | 'down') => {
+                set((state) => {
+                    // 1. Sort by current order (handle ties deterministically using ID)
+                    const sortedCategories = [...state.categories].sort((a, b) => {
+                        const orderDiff = (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+                        if (orderDiff !== 0) return orderDiff;
+                        return a.id - b.id;
+                    });
+
+                    const currentIndex = sortedCategories.findIndex(c => c.id === id);
+                    if (currentIndex === -1) return {};
+
+                    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+
+                    // Bounds check
+                    if (targetIndex < 0 || targetIndex >= sortedCategories.length) return {};
+
+                    // 2. Move element in the array
+                    const [movedCategory] = sortedCategories.splice(currentIndex, 1);
+                    sortedCategories.splice(targetIndex, 0, movedCategory);
+
+                    // 3. Re-assign sortOrder 1 to N for ALL categories to ensure consistency
+                    const syncStore = useSyncStore.getState();
+
+                    const updatedCategories = sortedCategories.map((cat, index) => {
+                        const newOrder = index + 1;
+                        if (cat.sortOrder !== newOrder) {
+                            const updated = {
+                                ...cat,
+                                sortOrder: newOrder,
+                                updatedAt: new Date()
+                            };
+                            // Queue for sync only if changed
+                            syncStore.addToQueue('category', updated);
+                            return updated;
+                        }
+                        return cat;
+                    });
+
+                    syncStore.syncAll().catch(console.error);
+
+                    return { categories: updatedCategories };
                 });
             },
         }),

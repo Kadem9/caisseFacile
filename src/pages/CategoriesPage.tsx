@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useProductStore } from '../stores';
-import { PlusIcon, EditIcon, TrashIcon } from '../components/ui';
+import { PlusIcon, EditIcon, TrashIcon, ArrowUpIcon, ArrowDownIcon } from '../components/ui';
 import type { Category, CategoryCreateInput } from '../types';
 import { ask } from '@tauri-apps/plugin-dialog';
 import './CategoriesPage.css';
@@ -12,7 +12,7 @@ const CATEGORY_COLORS = [
 ];
 
 export const CategoriesPage: React.FC = () => {
-    const { categories, addCategory, updateCategory, deleteCategory } = useProductStore();
+    const { categories, addCategory, updateCategory, deleteCategory, reorderCategory } = useProductStore();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCategory, setEditingCategory] = useState<Category | null>(null);
     const [formData, setFormData] = useState<CategoryCreateInput>({
@@ -94,15 +94,36 @@ export const CategoriesPage: React.FC = () => {
                                     {category.name.charAt(0)}
                                 </div>
                                 <div className="category-card__actions">
+                                    <div className="category-card__reorder-group">
+                                        <button
+                                            onClick={() => reorderCategory(category.id, 'up')}
+                                            className="category-card__action-btn category-card__action-btn--reorder"
+                                            disabled={category.sortOrder <= 1} // Disable if first (or check index in logic)
+                                            title="Monter"
+                                        >
+                                            <ArrowUpIcon size={16} />
+                                        </button>
+                                        <button
+                                            onClick={() => reorderCategory(category.id, 'down')}
+                                            className="category-card__action-btn category-card__action-btn--reorder"
+                                            disabled={category.sortOrder >= categories.length} // Rough check, store logic handles bounds safely
+                                            title="Descendre"
+                                        >
+                                            <ArrowDownIcon size={16} />
+                                        </button>
+                                    </div>
+                                    <div className="category-card__divider"></div>
                                     <button
                                         onClick={() => handleOpenModal(category)}
                                         className="category-card__action-btn"
+                                        title="Modifier"
                                     >
                                         <EditIcon size={18} />
                                     </button>
                                     <button
                                         onClick={() => handleDelete(category.id)}
                                         className="category-card__action-btn category-card__action-btn--danger"
+                                        title="Supprimer"
                                     >
                                         <TrashIcon size={18} />
                                     </button>

@@ -3,7 +3,7 @@
 // ===================================
 
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { LoginPage, POSPage, ProductsPage, StockPage, ReportsPage, ClosurePage, SettingsPage, CategoriesPage, BackupPage, UsersPage, ActivityPage } from './pages';
+import { LoginPage, POSPage, ProductsPage, StockPage, ReportsPage, ClosurePage, SettingsPage, CategoriesPage, BackupPage, UsersPage, ActivityPage, DashboardPage } from './pages';
 import MenusPage from './pages/MenusPage';
 import { AdminLayout } from './layouts/AdminLayout';
 import { useAuthStore } from './stores';
@@ -113,7 +113,8 @@ function App() {
           }
         >
           <Route index element={<Navigate to="/admin/dashboard" replace />} />
-          <Route path="dashboard" element={<ReportsPage />} />
+          <Route path="dashboard" element={<DashboardPage />} />
+          <Route path="reports" element={<ReportsPage />} />
 
           {/* Restricted Routes */}
           <Route path="products" element={

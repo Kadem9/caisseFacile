@@ -44,8 +44,18 @@ export const AdminLayout: React.FC = () => {
                             `admin-sidebar__link ${isActive ? 'admin-sidebar__link--active' : ''}`
                         }
                     >
-                        <ChartIcon size={20} />
+                        <BoxIcon size={20} />
                         Tableau de bord
+                    </NavLink>
+
+                    <NavLink
+                        to="/admin/reports"
+                        className={({ isActive }) =>
+                            `admin-sidebar__link ${isActive ? 'admin-sidebar__link--active' : ''}`
+                        }
+                    >
+                        <ChartIcon size={20} />
+                        Rapports
                     </NavLink>
 
                     {!isCashier && (

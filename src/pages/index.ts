@@ -13,4 +13,5 @@ export { CategoriesPage } from './CategoriesPage';
 export { BackupPage } from './BackupPage';
 export { UsersPage } from './UsersPage';
 export { ActivityPage } from './ActivityPage';
+export { default as DashboardPage } from './DashboardPage';
 
