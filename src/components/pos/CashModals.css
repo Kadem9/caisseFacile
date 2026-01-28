@@ -318,3 +318,75 @@
         transform: translateY(0);
     }
 }
+
+/* Response Layout for smaller laptops/tablets */
+@media (max-height: 800px) {
+    .cash-modal {
+        height: 95vh !important;
+        max-height: 95vh !important;
+    }
+
+    .modal-header {
+        padding: 1rem 1.5rem;
+    }
+
+    .modal-header h2 {
+        font-size: 1.25rem;
+    }
+
+    .cash-modal-body {
+        padding: 1rem;
+    }
+
+    /* Reduce vertical spacing in forms */
+    .form-group {
+        margin-bottom: 0.75rem;
+    }
+
+    .form-group label {
+        margin-bottom: 0.25rem;
+        font-size: 0.75rem;
+    }
+
+    /* Compact Type Toggle */
+    .type-btn {
+        padding: 0.5rem;
+        font-size: 0.9rem;
+    }
+
+    /* Compact Input */
+    .input-wrapper input {
+        padding: 0.5rem 2.5rem 0.5rem 0.75rem;
+        font-size: 1.5rem;
+    }
+
+    .input-icon {
+        right: 1rem;
+        width: 18px;
+        height: 18px;
+    }
+
+    /* Compact Reasons Grid */
+    .reasons-grid {
+        gap: 0.5rem;
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .reason-btn {
+        padding: 0.5rem;
+        font-size: 0.9rem;
+    }
+
+    .custom-reason-input {
+        padding: 0.5rem;
+        font-size: 0.9rem;
+    }
+
+    .custom-reason-wrapper {
+        margin-top: 0.5rem;
+    }
+
+    .modal-footer {
+        padding: 1rem 1.5rem;
+    }
+}

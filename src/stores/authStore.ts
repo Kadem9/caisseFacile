@@ -13,9 +13,11 @@ interface AuthState {
     isAuthenticated: boolean;
     availableUsers: User[];
     lastUserId: number;
+    isSafeMode: boolean;
 
     // Actions
     setAvailableUsers: (users: User[]) => void;
+    setSafeMode: (enabled: boolean) => void;
     login: (user: User) => void;
     logout: () => void;
 
@@ -36,6 +38,7 @@ export const useAuthStore = create<AuthState>()(
             isAuthenticated: false,
             availableUsers: [],
             lastUserId: 0,
+            isSafeMode: false,
 
             // Actions
             setAvailableUsers: (users) => {
@@ -46,6 +49,8 @@ export const useAuthStore = create<AuthState>()(
                 set({ availableUsers: users, lastUserId: maxId });
             },
 
+            setSafeMode: (enabled) => set({ isSafeMode: enabled }),
+
             login: (user) => set({
                 currentUser: user,
                 isAuthenticated: true
@@ -53,7 +58,8 @@ export const useAuthStore = create<AuthState>()(
 
             logout: () => set({
                 currentUser: null,
-                isAuthenticated: false
+                isAuthenticated: false,
+                isSafeMode: false
             }),
 
             // CRUD Actions

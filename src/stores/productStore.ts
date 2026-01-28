@@ -56,6 +56,9 @@ interface ProductState {
     updateStock: (productId: number, quantity: number) => void;
     decrementStock: (productId: number, quantity: number) => void;
 
+    // Generic Bulk Update
+    updateAllProductsPrintTicket: (value: boolean) => void;
+
     // Getters
     getProductsByCategory: (categoryId: number) => Product[];
     getActiveProducts: () => Product[];
@@ -186,6 +189,27 @@ export const useProductStore = create<ProductState>()(
                         useSyncStore.getState().addToQueue('product', updatedProduct);
                         useSyncStore.getState().syncAll().catch(console.error); // Immediate sync attempt
                     }
+                    return { products };
+                });
+            },
+
+            updateAllProductsPrintTicket: (value) => {
+                set((state) => {
+                    const products = state.products.map((p) => {
+                        // Only update if changed prevents unnecessary syncs?
+                        // But simplification: update all.
+                        return { ...p, printTicket: value, updatedAt: new Date() };
+                    });
+
+                    // Queue all for sync
+                    // Note: This might be heavy if hundreds of products. 
+                    // Ideally sync store handles bulk, but for now queue individually is safe.
+                    const syncStore = useSyncStore.getState();
+                    products.forEach(p => {
+                        syncStore.addToQueue('product', p);
+                    });
+                    syncStore.syncAll().catch(console.error);
+
                     return { products };
                 });
             },

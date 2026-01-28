@@ -66,3 +66,20 @@
     border-color: #fca5a5;
     color: #dc2626;
 }
+
+@media (max-height: 800px) {
+    .btn-numpad {
+        height: 42px;
+        font-size: 1.25rem;
+    }
+
+    .btn-numpad--clear {
+        height: 38px;
+        font-size: 0.875rem;
+    }
+
+    .virtual-numpad__grid {
+        margin-bottom: 0.25rem;
+        gap: 0.35rem;
+    }
+}

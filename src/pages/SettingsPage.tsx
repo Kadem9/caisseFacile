@@ -17,7 +17,8 @@ import {
     MonitorIcon,
     LightbulbIcon,
     WifiIcon,
-    CardIcon
+    CardIcon,
+    ZapIcon
 } from '../components/ui';
 import './SettingsPage.css';
 import {
@@ -30,6 +31,7 @@ import {
 import { useTransactionStore } from '../stores/transactionStore';
 import { useClosureStore } from '../stores/closureStore';
 import { useSyncStore } from '../stores/syncStore';
+import { useProductStore } from '../stores/productStore';
 
 interface SerialPortInfo {
     name: string;
@@ -114,7 +116,7 @@ export const SettingsPage: React.FC = () => {
     const [status, setStatus] = useState<HardwareStatus | null>(null);
     const [isScanning, setIsScanning] = useState(false);
     const [testResult, setTestResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-    const [activeTab, setActiveTab] = useState<'printer' | 'drawer' | 'tpe' | 'sync'>('printer');
+    const [activeTab, setActiveTab] = useState<'printer' | 'drawer' | 'tpe' | 'sync' | 'shortcuts'>('printer');
     const [isCheckingSync, setIsCheckingSync] = useState(false);
     const [syncStatus, setSyncStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
     const [systemPrinters, setSystemPrinters] = useState<SystemPrinterInfo[]>([]);
@@ -138,6 +140,10 @@ export const SettingsPage: React.FC = () => {
 
     // Sync Store
     const { apiUrl, setApiUrl } = useSyncStore();
+    const { products, updateAllProductsPrintTicket } = useProductStore();
+
+    // Computed Shortcuts state
+    const areAllProductsPrinting = products.length > 0 && products.every(p => p.printTicket);
 
     // Load configuration on mount
     useEffect(() => {
@@ -426,6 +432,13 @@ export const SettingsPage: React.FC = () => {
                         type="button"
                     >
                         <CardIcon size={18} className="inline mr-2" /> TPE
+                    </button>
+                    <button
+                        className={`settings-tab ${activeTab === 'shortcuts' ? 'settings-tab--active' : ''}`}
+                        onClick={() => setActiveTab('shortcuts')}
+                        type="button"
+                    >
+                        <ZapIcon size={18} className="inline mr-2" /> Raccourcis
                     </button>
                 </nav>
 
@@ -809,6 +822,38 @@ export const SettingsPage: React.FC = () => {
                                     >
                                         VIDER LES DONNEES
                                     </Button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Shortcuts Tab */}
+                    {activeTab === 'shortcuts' && (
+                        <div className="settings-section">
+                            <div className="settings-section__header">
+                                <h2>Raccourcis</h2>
+                            </div>
+
+                            <div className="settings-form">
+                                <div className="settings-form__group">
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', background: '#f8fafc', borderRadius: '8px' }}>
+                                        <div>
+                                            <label style={{ margin: 0, fontSize: '1.1em', cursor: 'pointer' }} htmlFor="toggle-print-all">
+                                                Tous les produits sortent en imprimante cuisine
+                                            </label>
+                                            <p className="settings-form__help" style={{ margin: '5px 0 0' }}>
+                                                Active ou désactive l'impression ticket pour <strong>tous</strong> les produits.
+                                            </p>
+                                        </div>
+                                        <button
+                                            id="toggle-print-all"
+                                            type="button"
+                                            onClick={() => updateAllProductsPrintTicket(!areAllProductsPrinting)}
+                                            className={`toggle-switch ${areAllProductsPrinting ? 'toggle-switch--active' : ''}`}
+                                        >
+                                            <span className="toggle-switch__thumb" />
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>

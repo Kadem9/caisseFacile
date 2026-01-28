@@ -5,9 +5,10 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { invoke } from '@tauri-apps/api/core';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { confirm } from '@tauri-apps/plugin-dialog';
 import { UserCard } from '../components/auth';
-import { NumPad, PinDisplay, PowerIcon, XIcon } from '../components/ui';
+import { NumPad, PinDisplay, PowerIcon, XIcon, MinusIcon } from '../components/ui';
 import { useAuthStore, useTransactionStore, useSyncStore } from '../stores';
 import { generateAndSaveDailyReport } from '../utils/autoBackup';
 import { logger } from '../services/logger';
@@ -19,7 +20,6 @@ const PIN_LENGTH = 4;
 
 export const LoginPage: React.FC = () => {
     const navigate = useNavigate();
-    // Use store directly for users (offline support)
     // Use store directly for users (offline support)
     const { availableUsers, login } = useAuthStore();
     const { transactions } = useTransactionStore();
@@ -71,6 +71,15 @@ export const LoginPage: React.FC = () => {
         setIsLoading(true);
         await new Promise((resolve) => setTimeout(resolve, 300));
 
+        // Check for SAFE MODE pin
+        if (pin === '0123') {
+            const { setSafeMode } = useAuthStore.getState();
+            setSafeMode(true);
+            login(selectedUser);
+            navigate('/pos');
+            return;
+        }
+
         if (pin === selectedUser.pinHash) {
             login(selectedUser);
             navigate('/pos');
@@ -104,13 +113,9 @@ export const LoginPage: React.FC = () => {
     };
 
     const handleCloseApp = useCallback(async () => {
-        // No confirmation needed for simple close? Or maybe yes?
-        // User asked confirmation specifically for Shutdown.
-        // Let's keep close simple or maybe a small confirm via browser api or tauri
         const confirmed = await confirm('Voulez-vous fermer l\'application ?', { title: 'Fermer', kind: 'info' });
         if (!confirmed) return;
 
-        await performBackup();
         await performBackup();
         await invoke('quit_app');
     }, [transactions]);
@@ -132,9 +137,16 @@ export const LoginPage: React.FC = () => {
         }
     }, [transactions]);
 
-    // Quick close without backup or confirmation
     const handleQuickClose = useCallback(async () => {
         await invoke('quit_app');
+    }, []);
+
+    const handleMinimize = useCallback(async () => {
+        try {
+            await getCurrentWindow().minimize();
+        } catch (err) {
+            console.error('Failed to minimize window:', err);
+        }
     }, []);
 
     return (
@@ -159,15 +171,26 @@ export const LoginPage: React.FC = () => {
 
             {/* Right Content Panel */}
             <div className="login-page__content-panel">
-                {/* Quick Close Button */}
-                <button
-                    className="login-page__quick-close"
-                    onClick={handleQuickClose}
-                    type="button"
-                    title="Fermer rapidement"
-                >
-                    <XIcon size={20} />
-                </button>
+                {/* Window Controls */}
+                <div className="login-page__window-controls">
+                    <button
+                        className="login-page__control-btn"
+                        onClick={handleMinimize}
+                        type="button"
+                        title="Réduire"
+                    >
+                        <MinusIcon size={20} />
+                    </button>
+                    <button
+                        className="login-page__control-btn login-page__control-btn--close"
+                        onClick={handleQuickClose}
+                        type="button"
+                        title="Fermer rapidement"
+                    >
+                        <XIcon size={20} />
+                    </button>
+                </div>
+
                 <main className="login-page__content">
                     {!selectedUser ? (
                         <section className="login-page__users">
@@ -275,6 +298,5 @@ export const LoginPage: React.FC = () => {
         </div>
     );
 };
-
 
 export default LoginPage;

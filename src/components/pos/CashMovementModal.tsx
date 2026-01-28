@@ -78,7 +78,7 @@ export const CashMovementModal: React.FC<CashMovementModalProps> = ({
 
     return (
         <div className="modal-overlay">
-            <div className="modal-content cash-modal" style={{ maxHeight: '90vh', overflowY: 'auto' }}>
+            <div className="modal-content cash-modal">
                 <header className="modal-header">
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                         <h2>{type === 'withdrawal' ? 'Sortie de Caisse' : 'Entrée de Caisse'}</h2>

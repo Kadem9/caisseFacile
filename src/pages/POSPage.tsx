@@ -17,7 +17,7 @@ export const POSPage: React.FC = () => {
     const navigate = useNavigate();
     const { currentUser, logout } = useAuthStore();
     const { items, totalAmount, addItem, incrementItem, decrementItem, removeItem, clearCart } = useCartStore();
-    const { addTransaction, getSessionTotal } = useTransactionStore();
+    const { addTransaction, getTodayTransactions } = useTransactionStore();
     const { getActiveCategories, getLowStockProducts, decrementStock, products } = useProductStore();
     const { getActiveMenus } = useMenuStore();
 
@@ -36,14 +36,16 @@ export const POSPage: React.FC = () => {
     const [selectedMenu, setSelectedMenu] = useState<Menu | null>(null);
     const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }));
 
-    const { isClosureOpen, openClosure, addMovement } = useClosureStore();
+    const { isClosureOpen, openClosure, addMovement, currentClosure } = useClosureStore();
+    const { isSafeMode } = useAuthStore();
+    const [isSessionTotalVisible, setIsSessionTotalVisible] = useState(false);
 
     useEffect(() => {
-        // Enforce open session
-        if (!isClosureOpen()) {
+        // Enforce open session UNLESS in Safe Mode
+        if (!isClosureOpen() && !isSafeMode) {
             setIsOpenClosureModalOpen(true);
         }
-    }, [isClosureOpen]);
+    }, [isClosureOpen, isSafeMode]);
 
     const handleOpenClosure = useCallback((initialAmount: number) => {
         if (!currentUser) return;
@@ -65,7 +67,14 @@ export const POSPage: React.FC = () => {
     const filteredProducts = useMemo(() => {
         return products.filter(p => p.categoryId === activeCategory && p.isActive);
     }, [activeCategory, products]);
-    const sessionTotal = getSessionTotal();
+    const sessionTotal = useMemo(() => {
+        if (!currentClosure) return 0;
+        const openTime = new Date(currentClosure.openedAt).getTime();
+        const todayTransactions = getTodayTransactions();
+        return todayTransactions
+            .filter(t => new Date(t.createdAt).getTime() >= openTime)
+            .reduce((sum, t) => sum + t.totalAmount, 0);
+    }, [currentClosure, getTodayTransactions]);
     const lowStockCount = getLowStockProducts().length;
     const { addToQueue, isOnline } = useSyncStore();
 
@@ -299,6 +308,18 @@ export const POSPage: React.FC = () => {
 
     return (
         <div className="pos-page">
+            {isSafeMode && (
+                <div style={{
+                    background: '#f59e0b',
+                    color: 'white',
+                    padding: '4px 12px',
+                    textAlign: 'center',
+                    fontWeight: 'bold',
+                    fontSize: '0.85rem'
+                }}>
+                    ⚠️ MODE SANS ÉCHEC (MAINTENANCE) - Aucune donnée comptable ne sera enregistrée
+                </div>
+            )}
             {/* Header */}
             <header className="pos-header">
                 <div className="pos-header__brand">
@@ -327,7 +348,14 @@ export const POSPage: React.FC = () => {
                 <div className="pos-header__center">
                     <div className="pos-header__session-info">
                         <span className="label">Session :</span>
-                        <span className="amount">{formatPrice(sessionTotal)}</span>
+                        <span
+                            className="amount"
+                            onClick={() => setIsSessionTotalVisible(!isSessionTotalVisible)}
+                            style={{ cursor: 'pointer', userSelect: 'none' }}
+                            title={isSessionTotalVisible ? "Masquer le montant" : "Afficher le montant"}
+                        >
+                            {isSessionTotalVisible ? formatPrice(sessionTotal) : '*****'}
+                        </span>
                     </div>
                     {/* Clock */}
                     <div className="pos-header__clock" style={{

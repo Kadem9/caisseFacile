@@ -73,10 +73,16 @@
     position: relative;
 }
 
-.login-page__quick-close {
+.login-page__window-controls {
     position: absolute;
     top: 12px;
     right: 12px;
+    display: flex;
+    gap: 8px;
+    z-index: 10;
+}
+
+.login-page__control-btn {
     width: 36px;
     height: 36px;
     border-radius: 50%;
@@ -88,13 +94,19 @@
     align-items: center;
     justify-content: center;
     transition: all 0.2s ease;
-    z-index: 10;
 }
 
-.login-page__quick-close:hover {
+.login-page__control-btn:hover {
+    background: #e2e8f0;
+    color: #334155;
+}
+
+.login-page__control-btn--close:hover {
     background: #fee2e2;
     color: #dc2626;
 }
+
+
 
 /* Content Area */
 .login-page__content {
