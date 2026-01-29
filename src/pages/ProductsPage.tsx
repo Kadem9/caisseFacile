@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useProductStore } from '../stores';
-import { PackageIcon, TrashIcon, SearchIcon, PlusIcon, AlertIcon, XIcon, CheckIcon, ClipboardIcon } from '../components/ui';
+import { PackageIcon, TrashIcon, SearchIcon, PlusIcon, AlertIcon, XIcon, CheckIcon, ClipboardIcon, ArrowUpIcon, ArrowDownIcon } from '../components/ui';
 import { getProductImageUrl } from '../helpers/urlHelper';
 import type { Product, ProductCreateInput } from '../types';
 import { ask } from '@tauri-apps/plugin-dialog';
@@ -15,7 +15,8 @@ export const ProductsPage: React.FC = () => {
         updateProduct,
         deleteProduct,
         toggleProductActive,
-        uploadProductImage
+        uploadProductImage,
+        reorderProduct
     } = useProductStore();
 
     const [searchQuery, setSearchQuery] = useState('');
@@ -36,7 +37,14 @@ export const ProductsPage: React.FC = () => {
     });
 
     const filteredProducts = useMemo(() => {
-        let result = products;
+        let result = [...products];
+        // Sort by sortOrder
+        result.sort((a, b) => {
+            const orderDiff = (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+            if (orderDiff !== 0) return orderDiff;
+            return a.id - b.id;
+        });
+
         if (selectedCategoryId) {
             result = result.filter(p => p.categoryId === selectedCategoryId);
         }
@@ -286,6 +294,26 @@ export const ProductsPage: React.FC = () => {
                                     >
                                         <ClipboardIcon size={14} />
                                     </button>
+
+                                    {selectedCategoryId && !searchQuery && (
+                                        <>
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); reorderProduct(product.id, 'up'); }}
+                                                className="product-card__reorder"
+                                                title="Monter"
+                                            >
+                                                <ArrowUpIcon size={14} />
+                                            </button>
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); reorderProduct(product.id, 'down'); }}
+                                                className="product-card__reorder"
+                                                title="Descendre"
+                                            >
+                                                <ArrowDownIcon size={14} />
+                                            </button>
+                                        </>
+                                    )}
+
                                     <button
                                         onClick={(e) => { e.stopPropagation(); toggleProductActive(product.id); }}
                                         className={`product-card__toggle ${product.isActive ? 'toggle--active' : ''}`}

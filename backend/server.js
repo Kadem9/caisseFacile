@@ -109,6 +109,7 @@ db.exec(`
         stock_quantity INTEGER NOT NULL,
         alert_threshold INTEGER NOT NULL,
         is_active INTEGER NOT NULL,
+        sort_order INTEGER DEFAULT 0,
         image_path TEXT,
         created_at TEXT,
         updated_at TEXT,
@@ -287,6 +288,12 @@ try {
     if (!tableInfo.some(col => col.name === 'updated_at')) {
         db.exec('ALTER TABLE products ADD COLUMN updated_at TEXT');
         console.log('[Migration] Added updated_at column');
+    }
+
+    // Check and add sort_order
+    if (!tableInfo.some(col => col.name === 'sort_order')) {
+        db.exec('ALTER TABLE products ADD COLUMN sort_order INTEGER DEFAULT 0');
+        console.log('[Migration] Added sort_order column');
     }
 
 
@@ -682,8 +689,8 @@ app.post('/api/sync/products', (req, res) => {
 
         const insert = db.prepare(`
             INSERT OR REPLACE INTO products 
-            (local_id, category_id, name, price, stock_quantity, alert_threshold, is_active, image_path, synced_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (local_id, category_id, name, price, stock_quantity, alert_threshold, is_active, image_path, sort_order, synced_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
         const now = new Date().toISOString();
@@ -699,6 +706,7 @@ app.post('/api/sync/products', (req, res) => {
                     p.alertThreshold,
                     p.isActive ? 1 : 0,
                     p.imagePath || null, // image_path
+                    p.sortOrder || 0, // sort_order
                     now, // synced_at
                     p.updatedAt || now // updated_at
                 );
@@ -905,7 +913,7 @@ app.post('/api/sync/stock-movements', (req, res) => {
                     m.type,
                     m.quantity,
                     m.reason || null,
-                    m.createdAt
+                    m.createdAt || new Date().toISOString()
                 );
             }
         });
@@ -1028,6 +1036,7 @@ app.get('/api/sync/diff', (req, res) => {
                 name, price, stock_quantity as stockQuantity, 
                 alert_threshold as alertThreshold, is_active as isActive,
                 image_path as imagePath,
+                sort_order as sortOrder,
                 created_at as createdAt,
                 updated_at as updatedAt
             FROM products 

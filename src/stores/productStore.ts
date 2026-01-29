@@ -16,22 +16,22 @@ const INITIAL_CATEGORIES: Category[] = [
 
 const INITIAL_PRODUCTS: Product[] = [
     // Boissons
-    { id: 1, categoryId: 1, name: 'Bière 25cl', price: 3.00, stockQuantity: 100, alertThreshold: 20, isActive: true, printTicket: true, createdAt: new Date(), updatedAt: new Date() },
-    { id: 2, categoryId: 1, name: 'Bière 50cl', price: 5.00, stockQuantity: 80, alertThreshold: 15, isActive: true, printTicket: true, createdAt: new Date(), updatedAt: new Date() },
-    { id: 3, categoryId: 1, name: 'Coca-Cola', price: 2.50, stockQuantity: 50, alertThreshold: 10, isActive: true, printTicket: true, createdAt: new Date(), updatedAt: new Date() },
-    { id: 4, categoryId: 1, name: 'Eau', price: 1.50, stockQuantity: 100, alertThreshold: 20, isActive: true, printTicket: true, createdAt: new Date(), updatedAt: new Date() },
-    { id: 5, categoryId: 1, name: 'Café', price: 1.50, stockQuantity: 200, alertThreshold: 30, isActive: true, printTicket: true, createdAt: new Date(), updatedAt: new Date() },
+    { id: 1, categoryId: 1, name: 'Bière 25cl', price: 3.00, stockQuantity: 100, alertThreshold: 20, isActive: true, printTicket: true, sortOrder: 1, createdAt: new Date(), updatedAt: new Date() },
+    { id: 2, categoryId: 1, name: 'Bière 50cl', price: 5.00, stockQuantity: 80, alertThreshold: 15, isActive: true, printTicket: true, sortOrder: 2, createdAt: new Date(), updatedAt: new Date() },
+    { id: 3, categoryId: 1, name: 'Coca-Cola', price: 2.50, stockQuantity: 50, alertThreshold: 10, isActive: true, printTicket: true, sortOrder: 3, createdAt: new Date(), updatedAt: new Date() },
+    { id: 4, categoryId: 1, name: 'Eau', price: 1.50, stockQuantity: 100, alertThreshold: 20, isActive: true, printTicket: true, sortOrder: 4, createdAt: new Date(), updatedAt: new Date() },
+    { id: 5, categoryId: 1, name: 'Café', price: 1.50, stockQuantity: 200, alertThreshold: 30, isActive: true, printTicket: true, sortOrder: 5, createdAt: new Date(), updatedAt: new Date() },
     // Snacks
-    { id: 6, categoryId: 2, name: 'Chips', price: 2.00, stockQuantity: 40, alertThreshold: 10, isActive: true, createdAt: new Date(), updatedAt: new Date() },
-    { id: 7, categoryId: 2, name: 'Cacahuètes', price: 2.50, stockQuantity: 30, alertThreshold: 10, isActive: true, createdAt: new Date(), updatedAt: new Date() },
-    { id: 8, categoryId: 2, name: 'Bonbons', price: 1.00, stockQuantity: 100, alertThreshold: 20, isActive: true, createdAt: new Date(), updatedAt: new Date() },
+    { id: 6, categoryId: 2, name: 'Chips', price: 2.00, stockQuantity: 40, alertThreshold: 10, isActive: true, sortOrder: 1, createdAt: new Date(), updatedAt: new Date() },
+    { id: 7, categoryId: 2, name: 'Cacahuètes', price: 2.50, stockQuantity: 30, alertThreshold: 10, isActive: true, sortOrder: 2, createdAt: new Date(), updatedAt: new Date() },
+    { id: 8, categoryId: 2, name: 'Bonbons', price: 1.00, stockQuantity: 100, alertThreshold: 20, isActive: true, sortOrder: 3, createdAt: new Date(), updatedAt: new Date() },
     // Repas
-    { id: 9, categoryId: 3, name: 'Hot-Dog', price: 4.00, stockQuantity: 25, alertThreshold: 5, isActive: true, createdAt: new Date(), updatedAt: new Date() },
-    { id: 10, categoryId: 3, name: 'Sandwich', price: 5.00, stockQuantity: 20, alertThreshold: 5, isActive: true, createdAt: new Date(), updatedAt: new Date() },
-    { id: 11, categoryId: 3, name: 'Frites', price: 3.00, stockQuantity: 30, alertThreshold: 10, isActive: true, createdAt: new Date(), updatedAt: new Date() },
+    { id: 9, categoryId: 3, name: 'Hot-Dog', price: 4.00, stockQuantity: 25, alertThreshold: 5, isActive: true, sortOrder: 1, createdAt: new Date(), updatedAt: new Date() },
+    { id: 10, categoryId: 3, name: 'Sandwich', price: 5.00, stockQuantity: 20, alertThreshold: 5, isActive: true, sortOrder: 2, createdAt: new Date(), updatedAt: new Date() },
+    { id: 11, categoryId: 3, name: 'Frites', price: 3.00, stockQuantity: 30, alertThreshold: 10, isActive: true, sortOrder: 3, createdAt: new Date(), updatedAt: new Date() },
     // Desserts
-    { id: 12, categoryId: 4, name: 'Gaufre', price: 3.50, stockQuantity: 15, alertThreshold: 5, isActive: true, createdAt: new Date(), updatedAt: new Date() },
-    { id: 13, categoryId: 4, name: 'Crêpe', price: 3.00, stockQuantity: 15, alertThreshold: 5, isActive: true, createdAt: new Date(), updatedAt: new Date() },
+    { id: 12, categoryId: 4, name: 'Gaufre', price: 3.50, stockQuantity: 15, alertThreshold: 5, isActive: true, sortOrder: 1, createdAt: new Date(), updatedAt: new Date() },
+    { id: 13, categoryId: 4, name: 'Crêpe', price: 3.00, stockQuantity: 15, alertThreshold: 5, isActive: true, sortOrder: 2, createdAt: new Date(), updatedAt: new Date() },
 ];
 
 interface ProductState {
@@ -74,6 +74,7 @@ interface ProductState {
     mergeServerProducts: (products: Product[]) => void;
     mergeServerCategories: (categories: Category[]) => void;
     reorderCategory: (id: number, direction: 'up' | 'down') => void;
+    reorderProduct: (id: number, direction: 'up' | 'down') => void;
 }
 
 import { uploadImage } from '../services/api';
@@ -116,6 +117,7 @@ export const useProductStore = create<ProductState>()(
                     isActive: true, // Default to true
                     imagePath: input.imagePath,
                     printTicket: input.printTicket ?? true,
+                    sortOrder: input.sortOrder ?? (products.length + 1), // Default to end of list
                     createdAt: now,
                     updatedAt: now,
                 };
@@ -399,6 +401,7 @@ export const useProductStore = create<ProductState>()(
                             categoryId: sp.categoryId || serverProd.categoryId,
                             createdAt: new Date(serverProd.createdAt),
                             updatedAt: new Date(serverProd.updatedAt || new Date()),
+                            sortOrder: sp.sortOrder ?? 0,
                             isActive: true // Only active products reach here
                         };
 
@@ -528,6 +531,60 @@ export const useProductStore = create<ProductState>()(
                     return { categories: updatedCategories };
                 });
             },
+
+            reorderProduct: (id: number, direction: 'up' | 'down') => {
+                set((state) => {
+                    const productToMove = state.products.find(p => p.id === id);
+                    if (!productToMove) return {};
+
+                    // Filter products by the SAME category to order within that scope
+                    const categoryProducts = state.products
+                        .filter(p => p.categoryId === productToMove.categoryId && p.isActive) // Maybe include inactive? user usually reorders active view
+                        .sort((a, b) => {
+                            const orderDiff = (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+                            if (orderDiff !== 0) return orderDiff;
+                            return a.id - b.id;
+                        });
+
+                    const currentIndex = categoryProducts.findIndex(p => p.id === id);
+                    if (currentIndex === -1) return {};
+
+                    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+
+                    // Bounds check
+                    if (targetIndex < 0 || targetIndex >= categoryProducts.length) return {};
+
+                    // Swap in the local filtered array to calculate new sortOrders
+                    const [movedProduct] = categoryProducts.splice(currentIndex, 1);
+                    categoryProducts.splice(targetIndex, 0, movedProduct);
+
+                    // Re-assign sort orders
+                    const syncStore = useSyncStore.getState();
+                    const updates = new Map<number, number>();
+
+                    categoryProducts.forEach((prod, index) => {
+                        const newOrder = index + 1;
+                        if (prod.sortOrder !== newOrder) {
+                            updates.set(prod.id, newOrder);
+                        }
+                    });
+
+                    // Update the main state
+                    const updatedProducts = state.products.map(p => {
+                        if (updates.has(p.id)) {
+                            const newOrder = updates.get(p.id)!;
+                            const updated = { ...p, sortOrder: newOrder, updatedAt: new Date() };
+                            syncStore.addToQueue('product', updated);
+                            return updated;
+                        }
+                        return p;
+                    });
+
+                    syncStore.syncAll().catch(console.error);
+
+                    return { products: updatedProducts };
+                });
+            },
         }),
         {
             name: 'ma-caisse-products',
@@ -541,6 +598,20 @@ export const useProductStore = create<ProductState>()(
                 if (state) {
                     // Deduplicate products on load to fix any corruption
                     state.products = deduplicateProducts(state.products);
+
+                    // Migration: Ensure sortOrder exists
+                    let needUpdate = false;
+                    const migrated = state.products.map((p, index) => {
+                        if (typeof p.sortOrder === 'undefined') {
+                            needUpdate = true;
+                            return { ...p, sortOrder: index + 1 };
+                        }
+                        return p;
+                    });
+
+                    if (needUpdate) {
+                        state.products = migrated;
+                    }
                 }
             },
         }

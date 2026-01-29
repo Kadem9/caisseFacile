@@ -67,6 +67,7 @@ export interface Product {
   isActive: boolean;
   imagePath?: string;
   printTicket?: boolean;
+  sortOrder: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -83,6 +84,7 @@ export interface ProductCreateInput {
   alertThreshold?: number;
   imagePath?: string;
   printTicket?: boolean;
+  sortOrder?: number;
 }
 
 // ===================================

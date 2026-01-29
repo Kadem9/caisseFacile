@@ -170,7 +170,7 @@ export const StockPage: React.FC = () => {
             } else {
                 // Offline: Queue for later sync
                 console.log('[Stock] Offline mode - queuing movement for later sync');
-                addToQueue('stock_movement', { ...movementData, id: Date.now() } as unknown as StockMovement);
+                addToQueue('stock_movement', { ...movementData, id: Date.now(), createdAt: new Date() } as unknown as StockMovement);
             }
         } catch (err) {
             // Network error: Queue for later sync

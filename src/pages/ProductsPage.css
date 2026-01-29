@@ -325,7 +325,8 @@
 
 .product-card__toggle,
 .product-card__delete,
-.product-card__duplicate {
+.product-card__duplicate,
+.product-card__reorder {
     width: 28px;
     height: 28px;
     border-radius: 6px;
@@ -364,6 +365,16 @@
 .product-card__duplicate:hover {
     background: #eff6ff;
     color: var(--color-primary-dark);
+}
+
+.product-card__reorder {
+    background: rgba(255, 255, 255, 0.9);
+    color: var(--text-secondary);
+}
+
+.product-card__reorder:hover {
+    background: var(--color-gray-100);
+    color: var(--text-primary);
 }
 
 /* Side Panel */

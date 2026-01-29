@@ -65,7 +65,13 @@ export const POSPage: React.FC = () => {
 
     // Use useMemo to ensure filteredProducts updates when activeCategory or products change
     const filteredProducts = useMemo(() => {
-        return products.filter(p => p.categoryId === activeCategory && p.isActive);
+        return products
+            .filter(p => p.categoryId === activeCategory && p.isActive)
+            .sort((a, b) => {
+                const orderDiff = (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+                if (orderDiff !== 0) return orderDiff;
+                return a.id - b.id;
+            });
     }, [activeCategory, products]);
     const sessionTotal = useMemo(() => {
         if (!currentClosure) return 0;
@@ -138,6 +144,7 @@ export const POSPage: React.FC = () => {
             alertThreshold: 0,
             isActive: true,
             printTicket: true,
+            sortOrder: 0,
             imagePath: menu.imagePath, // Ajouter l'image du menu
             createdAt: new Date(),
             updatedAt: new Date(),
