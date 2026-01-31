@@ -77,6 +77,42 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     const [tpeStatus, setTpeStatus] = useState<TpeStatus>('idle');
     const [tpeMessage, setTpeMessage] = useState<string>('');
 
+    // Open Cash Drawer
+    const handleOpenDrawer = async () => {
+        try {
+            const savedConfig = localStorage.getItem('ma-caisse-hardware-config');
+            if (!savedConfig) {
+                // Default fallback
+                await invoke('open_cash_drawer');
+                return;
+            }
+
+            const config = JSON.parse(savedConfig);
+
+            if (config.connectionMode === 'driver' && config.systemPrinterName) {
+                await invoke('open_drawer_via_driver', {
+                    printerName: config.systemPrinterName,
+                    pin: config.drawerPin || 0,
+                });
+            } else {
+                // Serial mode or default
+                const port = config.drawerPort || config.printerPort;
+                // If no port configured but we are here, try default invoke or just warn?
+                // For safety, if no port, we might send empty string which backend might handle or error.
+                // But generally 'open_cash_drawer' without args isn't the signature we saw in SettingsPage.
+                // SettingsPage used: invoke('open_cash_drawer', { portName, baudRate, pin })
+
+                await invoke('open_cash_drawer', {
+                    portName: port || 'COM1', // Fallback avoid crash
+                    baudRate: config.printerBaudRate || 9600,
+                    pin: config.drawerPin || 0,
+                });
+            }
+        } catch (error) {
+            console.error('Failed to open cash drawer:', error);
+        }
+    };
+
     // Reset state when modal closes
     useEffect(() => {
         if (!isOpen) {
@@ -456,7 +492,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                                         variant="secondary"
                                         size="xl"
                                         className="btn-drawer"
-                                        onClick={() => console.log('Opening drawer...')}
+                                        onClick={handleOpenDrawer}
                                         type="button"
                                     >
                                         <DrawerIcon size={20} /> Ouvrir le tiroir

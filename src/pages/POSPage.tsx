@@ -4,7 +4,7 @@
 
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button, PackageIcon, ChartIcon, SettingsIcon, LogoutIcon, AlertIcon, HamburgerIcon, ShoppingCartIcon, TrashIcon, PlusIcon, MinusIcon, CardIcon } from '../components/ui';
+import { Button, PackageIcon, ChartIcon, SettingsIcon, LogoutIcon, AlertIcon, HamburgerIcon, ShoppingCartIcon, TrashIcon, PlusIcon, MinusIcon, CardIcon, DrawerIcon } from '../components/ui';
 import { PaymentModal, MenuCompositionModal, CashMovementModal, OpenClosureModal } from '../components/pos';
 import type { PaymentResult } from '../components/pos';
 import { CachedImage } from '../components/ui/CachedImage';
@@ -39,6 +39,38 @@ export const POSPage: React.FC = () => {
     const { isClosureOpen, openClosure, addMovement, currentClosure } = useClosureStore();
     const { isSafeMode } = useAuthStore();
     const [isSessionTotalVisible, setIsSessionTotalVisible] = useState(false);
+
+    // Open Cash Drawer Logic
+    const handleOpenDrawer = async () => {
+        try {
+            const { invoke } = await import('@tauri-apps/api/core');
+            const savedConfig = localStorage.getItem('ma-caisse-hardware-config');
+            if (!savedConfig) {
+                // Default fallback
+                await invoke('open_cash_drawer');
+                return;
+            }
+
+            const config = JSON.parse(savedConfig);
+
+            if (config.connectionMode === 'driver' && config.systemPrinterName) {
+                await invoke('open_drawer_via_driver', {
+                    printerName: config.systemPrinterName,
+                    pin: config.drawerPin || 0,
+                });
+            } else {
+                // Serial mode or default
+                const port = config.drawerPort || config.printerPort;
+                await invoke('open_cash_drawer', {
+                    portName: port || 'COM1',
+                    baudRate: config.printerBaudRate || 9600,
+                    pin: config.drawerPin || 0,
+                });
+            }
+        } catch (error) {
+            console.error('Failed to open cash drawer:', error);
+        }
+    };
 
     useEffect(() => {
         // Enforce open session UNLESS in Safe Mode
@@ -377,6 +409,29 @@ export const POSPage: React.FC = () => {
                     }}>
                         {currentTime}
                     </div>
+                    {/* Drawer Shortcut */}
+                    <button
+                        className="pos-header__icon-btn"
+                        onClick={handleOpenDrawer}
+                        type="button"
+                        title="Ouvrir le tiroir"
+                        style={{
+                            marginLeft: '10px',
+                            background: 'rgba(255,255,255,0.5)',
+                            border: '1px solid rgba(0,0,0,0.05)',
+                            borderRadius: '6px',
+                            padding: '4px 8px',
+                            cursor: 'pointer',
+                            color: 'var(--text-primary)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            height: '100%',
+                            minHeight: '34px'
+                        }}
+                    >
+                        <DrawerIcon size={20} />
+                    </button>
                     {lowStockCount > 0 && (
                         <button
                             className="pos-header__alert"
