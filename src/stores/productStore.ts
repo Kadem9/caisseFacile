@@ -384,16 +384,6 @@ export const useProductStore = create<ProductState>()(
 
                         const index = currentProducts.findIndex(p => p.id === productId);
 
-                        // If server says product is deleted (isActive: false), remove it locally
-                        if (!serverProd.isActive) {
-                            if (index >= 0) {
-                                console.log('[Sync Merge] Deleting product (isActive=false):', sp.name);
-                                currentProducts = currentProducts.filter(p => p.id !== productId);
-                                hasChanges = true;
-                            }
-                            return; // Don't add deleted products
-                        }
-
                         // Map server fields
                         const mappedProd = {
                             ...serverProd,
@@ -402,7 +392,7 @@ export const useProductStore = create<ProductState>()(
                             createdAt: new Date(serverProd.createdAt),
                             updatedAt: new Date(serverProd.updatedAt || new Date()),
                             sortOrder: sp.sortOrder ?? 0,
-                            isActive: true // Only active products reach here
+                            isActive: Boolean(serverProd.isActive)
                         };
 
                         if (index >= 0) {
@@ -442,15 +432,6 @@ export const useProductStore = create<ProductState>()(
 
                         // If server says category is deleted (isActive: false or not showing up in full sync? partial sync usually sends deletions as updates)
                         // In sync diff, we expect isActive: false for deleted items.
-                        if (serverCat.isActive === false) {
-                            if (index >= 0) {
-                                console.log('[Sync Merge] Deleting category (isActive=false):', serverCat.name);
-                                currentCategories = currentCategories.filter(c => c.id !== catId);
-                                hasChanges = true;
-                            }
-                            return;
-                        }
-
                         // Map server fields
                         const mappedCat: Category = {
                             id: catId,
@@ -458,7 +439,7 @@ export const useProductStore = create<ProductState>()(
                             color: serverCat.color || '#6b7280',
                             icon: serverCat.icon || '📦',
                             sortOrder: serverCat.sortOrder ?? 0,
-                            isActive: true, // Only active categories reach here
+                            isActive: Boolean(serverCat.isActive), // Ensure boolean and persist false
                             createdAt: new Date(serverCat.createdAt),
                             updatedAt: new Date(serverCat.updatedAt || new Date()),
                         };
