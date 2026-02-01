@@ -2118,11 +2118,18 @@ app.get('/api/z-caisse', (req, res) => {
         `).all(startDate, effectiveEndDate);
 
         // Get all products for name resolution
-        const products = db.prepare('SELECT id, local_id, name, price FROM products').all();
+        const products = db.prepare('SELECT id, local_id, category_id, name, price FROM products').all();
+        const categories = db.prepare('SELECT id, local_id, name FROM categories').all();
+
+        const categoryMap = {};
+        categories.forEach(c => {
+            categoryMap[c.id] = c.name;
+        });
+
         const productMap = {};
         products.forEach(p => {
-            productMap[p.id] = p;
-            productMap[p.local_id] = p;
+            productMap[p.id] = { ...p, categoryName: categoryMap[p.category_id] || 'Non catégorisé' };
+            productMap[p.local_id] = { ...p, categoryName: categoryMap[p.category_id] || 'Non catégorisé' };
         });
 
         // Resolve product names in items
@@ -2134,6 +2141,7 @@ app.get('/api/z-caisse', (req, res) => {
                 const product = productMap[productId];
                 return {
                     name: product?.name || item.name || item.productName || 'Produit inconnu',
+                    categoryName: product?.categoryName || 'Non catégorisé',
                     quantity: item.quantity || 1,
                     price: product?.price || item.price || 0
                 };
@@ -2170,10 +2178,11 @@ app.get('/api/z-caisse', (req, res) => {
             const items = resolveItems(t.items);
             items.forEach(item => {
                 const name = item.name;
+                const categoryName = item.categoryName;
                 const qty = item.quantity || 1;
                 const price = item.price || 0;
                 if (!productSummary[name]) {
-                    productSummary[name] = { quantity: 0, total: 0 };
+                    productSummary[name] = { quantity: 0, total: 0, categoryName };
                 }
                 productSummary[name].quantity += qty;
                 productSummary[name].total += price * qty;
@@ -2194,9 +2203,15 @@ app.get('/api/z-caisse', (req, res) => {
             },
             productSummary: Object.entries(productSummary).map(([name, data]) => ({
                 name,
+                categoryName: data.categoryName,
                 quantity: data.quantity,
                 total: data.total
-            })).sort((a, b) => b.quantity - a.quantity),
+            })).sort((a, b) => {
+                if (a.categoryName !== b.categoryName) {
+                    return a.categoryName.localeCompare(b.categoryName);
+                }
+                return b.quantity - a.quantity;
+            }),
             transactions: transactions.map(t => ({
                 ...t,
                 items: resolveItems(t.items),
@@ -2790,8 +2805,13 @@ app.get('/z-caisse', (req, res) => {
             
             doc.autoTable({
                 startY: y + 5,
-                head: [['Produit', 'Quantite', 'Total']],
-                body: reportData.productSummary.map(p => [p.name, p.quantity, formatPrice(p.total)]),
+                head: [['Catégorie', 'Produit', 'Quantité', 'Total']],
+                body: reportData.productSummary.map(p => [
+                    p.categoryName || '-',
+                    p.name, 
+                    p.quantity, 
+                    formatPrice(p.total)
+                ]),
                 theme: 'grid',
                 headStyles: { fillColor: [30, 41, 59] },
                 margin: { left: 14, right: 14 }
