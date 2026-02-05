@@ -2032,7 +2032,7 @@ app.get('/dashboard', (req, res) => {
                         <td>\${formatDate(tx.createdAt || tx.created_at)}</td>
                         <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">\${formatItems(tx.items)}</td>
                         <td class="amount">\${formatPrice(tx.totalAmount || tx.total_amount)}</td>
-                        <td><span class="badge \${tx.paymentMethod || tx.payment_method}">\${(tx.paymentMethod || tx.payment_method) === 'cash' ? 'Espèces' : 'Carte'}</span></td>
+                        <td><span class="badge \${tx.paymentMethod || tx.payment_method}">\${(tx.paymentMethod || tx.payment_method) === 'cash' ? 'Espèces' : (tx.paymentMethod || tx.payment_method) === 'benevole' ? 'Bénévole' : 'Carte'}</span></td>
                     </tr>
                 \`).join('');
             }
@@ -2124,6 +2124,7 @@ app.get('/api/z-caisse', (req, res) => {
         const categoryMap = {};
         categories.forEach(c => {
             categoryMap[c.id] = c.name;
+            if (c.local_id) categoryMap[c.local_id] = c.name;
         });
 
         const productMap = {};
@@ -2172,9 +2173,12 @@ app.get('/api/z-caisse', (req, res) => {
 
         const total = totalCash + totalCard + totalMixed;
 
-        // Build product summary
+        // Build product summary - exclude benevole transactions from sales totals
         const productSummary = {};
         transactions.forEach(t => {
+            // Skip benevole transactions to avoid skewing product sales totals
+            if (t.paymentMethod === 'benevole') return;
+
             const items = resolveItems(t.items);
             items.forEach(item => {
                 const name = item.name;
@@ -2296,23 +2300,27 @@ app.get('/api/z-caisse/export/csv', (req, res) => {
         });
 
         // Calculate totals for CSV header
-        let totalCash = 0, totalCard = 0, totalMixed = 0;
+        let totalCash = 0, totalCard = 0, totalMixed = 0, totalBenevole = 0;
         const productSummaryMap = {};
 
         transactions.forEach(t => {
             if (t.paymentMethod === 'cash') totalCash += t.totalAmount;
             else if (t.paymentMethod === 'card') totalCard += t.totalAmount;
             else if (t.paymentMethod === 'mixed') totalMixed += t.totalAmount;
+            else if (t.paymentMethod === 'benevole') totalBenevole += t.totalAmount;
 
-            const items = t.items ? JSON.parse(t.items) : [];
-            items.forEach(item => {
-                const productId = item.product?.id || item.product?.localId || item.productId || item.id;
-                const product = productMap[productId];
-                const name = product?.name || item.name || item.productName || 'Produit';
-                if (!productSummaryMap[name]) productSummaryMap[name] = { qty: 0, total: 0 };
-                productSummaryMap[name].qty += (item.quantity || 1);
-                productSummaryMap[name].total += (item.price || 0) * (item.quantity || 1);
-            });
+            // Only count non-benevole transactions in product sales for accurate accounting
+            if (t.paymentMethod !== 'benevole') {
+                const items = t.items ? JSON.parse(t.items) : [];
+                items.forEach(item => {
+                    const productId = item.product?.id || item.product?.localId || item.productId || item.id;
+                    const product = productMap[productId];
+                    const name = product?.name || item.name || item.productName || 'Produit';
+                    if (!productSummaryMap[name]) productSummaryMap[name] = { qty: 0, total: 0 };
+                    productSummaryMap[name].qty += (item.quantity || 1);
+                    productSummaryMap[name].total += (item.price || 0) * (item.quantity || 1);
+                });
+            }
         });
 
         // Build CSV
@@ -2323,6 +2331,7 @@ app.get('/api/z-caisse/export/csv', (req, res) => {
         csv += `Total Especes;${totalCash.toFixed(2)} EUR\n`;
         csv += `Total Carte;${totalCard.toFixed(2)} EUR\n`;
         if (totalMixed > 0) csv += `Total Mixte;${totalMixed.toFixed(2)} EUR\n`;
+        if (totalBenevole > 0) csv += `Total Benevole (non comptabilise);${totalBenevole.toFixed(2)} EUR\n`;
         csv += `TOTAL GENERAL;${(totalCash + totalCard + totalMixed).toFixed(2)} EUR\n\n`;
 
         csv += 'VENTES PAR PRODUIT\n';
@@ -2343,7 +2352,8 @@ app.get('/api/z-caisse/export/csv', (req, res) => {
                 return qty > 1 ? `${name} x${qty}` : name;
             }).join(', ');
             const payment = t.paymentMethod === 'cash' ? 'Espèces' :
-                t.paymentMethod === 'card' ? 'Carte' : 'Mixte';
+                t.paymentMethod === 'card' ? 'Carte' :
+                    t.paymentMethod === 'benevole' ? 'Bénévole' : 'Mixte';
             csv += `${t.localId};${t.createdAt};${productsStr};${t.totalAmount.toFixed(2)};${payment}\n`;
         });
 
@@ -2832,7 +2842,7 @@ app.get('/z-caisse', (req, res) => {
                     formatDate(tx.createdAt),
                     formatItems(tx.items),
                     formatPrice(tx.totalAmount),
-                    tx.paymentMethod === 'cash' ? 'Especes' : 'Carte'
+                    tx.paymentMethod === 'cash' ? 'Especes' : tx.paymentMethod === 'benevole' ? 'Benevole' : 'Carte'
                 ]),
                 theme: 'striped',
                 headStyles: { fillColor: [30, 41, 59] },

@@ -324,7 +324,7 @@ export const ReportsPage: React.FC = () => {
                                                     <td className="p-3">User #{closure.userId}</td>
                                                     <td className="p-3 font-medium">{closure.actualAmount?.toFixed(2)} €</td>
                                                     <td className={`p-3 font-medium ${(closure.difference || 0) < 0 ? 'text-red-500' :
-                                                            (closure.difference || 0) > 0 ? 'text-green-500' : 'text-gray-500'
+                                                        (closure.difference || 0) > 0 ? 'text-green-500' : 'text-gray-500'
                                                         }`}>
                                                         {closure.difference && closure.difference > 0 ? '+' : ''}{closure.difference?.toFixed(2)} €
                                                     </td>

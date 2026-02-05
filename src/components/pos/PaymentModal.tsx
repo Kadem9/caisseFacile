@@ -4,7 +4,7 @@
 
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Button, CashIcon, CardIcon, ArrowLeftIcon, XIcon, CheckIcon, DrawerIcon, RefreshIcon, AlertIcon } from '../ui';
+import { Button, CashIcon, CardIcon, ArrowLeftIcon, XIcon, CheckIcon, DrawerIcon, RefreshIcon, AlertIcon, UserIcon } from '../ui';
 import { TicketsModal } from './TicketsModal';
 import type { PaymentMethod, CartItem } from '../../types';
 import './PaymentModal.css';
@@ -255,10 +255,23 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             // Don't auto-send - let user click the button to avoid crashes
         } else if (selectedMethod === 'mixed') {
             setStep('mixed');
+        } else if (selectedMethod === 'benevole') {
+            // "Bénévole" mode: auto-validate with 0€ amount
+            const result: PaymentResult = {
+                method: 'benevole',
+                totalAmount: 0,
+                cashReceived: 0,
+                cardAmount: 0,
+                changeGiven: 0,
+            };
+            setStep('complete');
+            setTimeout(() => {
+                onConfirm(result);
+            }, 1500);
         } else {
             setStep('cash');
         }
-    }, []);
+    }, [onConfirm]);
 
 
     const handleDigitPress = useCallback((digit: string) => {
@@ -287,7 +300,12 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     }, []);
 
     const handleQuickAmount = useCallback((amount: number) => {
-        setCashInput(amount.toString().replace('.', ','));
+        // Add amount to existing value instead of replacing
+        setCashInput((prev) => {
+            const currentValue = parseFloat(prev.replace(',', '.') || '0');
+            const newValue = currentValue + amount;
+            return newValue.toFixed(2).replace('.', ',');
+        });
     }, []);
 
     const handleExactAmount = useCallback(() => {
@@ -381,6 +399,15 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                                     </div>
                                     <span>Mixte</span>
                                 </button> */}
+                                <button
+                                    className="payment-modal__method-btn payment-modal__method-btn--benevole"
+                                    onClick={() => handleMethodSelect('benevole')}
+                                    type="button"
+                                    style={{ borderColor: '#8b5cf6', color: '#8b5cf6' }}
+                                >
+                                    <UserIcon size={48} />
+                                    <span>Bénévole</span>
+                                </button>
                             </div>
                         </div>
                     )}
@@ -433,6 +460,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
                             <div className="payment-modal__column">
                                 {/* Banknote Selectors */}
+                                <p className="payment-modal__instruction">Le client nous a donné :</p>
                                 <div className="payment-modal__banknotes">
                                     {QUICK_AMOUNTS.map((amount) => (
                                         <button

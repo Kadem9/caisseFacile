@@ -6,7 +6,7 @@
 export type UserRole = 'admin' | 'manager' | 'cashier';
 
 // Payment methods available
-export type PaymentMethod = 'cash' | 'card' | 'mixed';
+export type PaymentMethod = 'cash' | 'card' | 'mixed' | 'benevole';
 
 // Stock movement types
 export type StockMovementType = 'in' | 'out' | 'adjustment' | 'sale';

@@ -202,24 +202,50 @@ export const POSPage: React.FC = () => {
     const handlePaymentConfirm = useCallback(async (paymentResult: PaymentResult) => {
         if (!currentUser) return;
 
-        // Prepare transaction data
+        // For charity/benevole mode, we want to record 0€ prices for accounting
+        // effectively making the products free.
+        const isBenevole = paymentResult.method === 'benevole';
+
+        // Prepare items with adjusted prices if needed
+        const transactionItems = items.map(item => {
+            if (isBenevole) {
+                // Return item with 0 price for this transaction
+                return {
+                    ...item,
+                    product: {
+                        ...item.product,
+                        price: 0
+                    },
+                    subtotal: 0
+                };
+            }
+            return item;
+        });
+
+        // Prepare transaction data payload for syncing
         const transactionData = {
             userId: currentUser.id,
-            totalAmount: paymentResult.totalAmount,
+            totalAmount: paymentResult.totalAmount, // Should be 0 for benevole
             paymentMethod: paymentResult.method,
             cashReceived: paymentResult.cashReceived,
             changeGiven: paymentResult.changeGiven,
-            items: items.map(item => ({
+            items: transactionItems.map(item => ({
                 product: { id: item.product.id },
                 quantity: item.quantity
+                // Note: backend sync mostly relies on `totalAmount` but if we want per-item detail 
+                // to reflect free, we might need to send unitPrice/subtotal if the backend supports it.
+                // Looking at server.js, it just JSON.stringifies items.
+                // So adding unitPrice/subtotal here is good practice if backend stores it.
+                // Server schema doesn't force structure, but client store does.
             })),
             createdAt: new Date().toISOString(),
         };
 
         // Always save locally first (for UI and offline safety)
+        // We pass the modified items so the local store records 0€ unit prices
         const transaction = addTransaction(
             currentUser.id,
-            items,
+            transactionItems,
             paymentResult.totalAmount,
             paymentResult.method,
             paymentResult.cashReceived,
