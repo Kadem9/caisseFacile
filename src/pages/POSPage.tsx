@@ -435,29 +435,6 @@ export const POSPage: React.FC = () => {
                     }}>
                         {currentTime}
                     </div>
-                    {/* Drawer Shortcut */}
-                    <button
-                        className="pos-header__icon-btn"
-                        onClick={handleOpenDrawer}
-                        type="button"
-                        title="Ouvrir le tiroir"
-                        style={{
-                            marginLeft: '10px',
-                            background: 'rgba(255,255,255,0.5)',
-                            border: '1px solid rgba(0,0,0,0.05)',
-                            borderRadius: '6px',
-                            padding: '4px 8px',
-                            cursor: 'pointer',
-                            color: 'var(--text-primary)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            height: '100%',
-                            minHeight: '34px'
-                        }}
-                    >
-                        <DrawerIcon size={20} />
-                    </button>
                     {lowStockCount > 0 && (
                         <button
                             className="pos-header__alert"
@@ -471,7 +448,15 @@ export const POSPage: React.FC = () => {
 
                 <div className="pos-header__right">
                     <div className="pos-header__nav">
-                        {/* Nav buttons can go here if needed, but keeping it clean for now as requested */}
+                        {/* Drawer shortcut - visible on all screen sizes */}
+                        <button
+                            className="pos-header__nav-btn"
+                            onClick={handleOpenDrawer}
+                            type="button"
+                            title="Ouvrir le tiroir"
+                        >
+                            <DrawerIcon size={20} />
+                        </button>
                         <button
                             className="pos-header__nav-btn"
                             onClick={() => navigate('/admin/dashboard')}
@@ -527,7 +512,7 @@ export const POSPage: React.FC = () => {
                         <span>Se déconnecter</span>
                     </Button>
                 </div>
-            </header>
+            </header >
 
             <main className="pos-main">
                 {/* Products Panel */}
@@ -772,14 +757,16 @@ export const POSPage: React.FC = () => {
             />
 
             {/* Menu Composition Modal */}
-            {selectedMenu && (
-                <MenuCompositionModal
-                    menu={selectedMenu}
-                    products={products}
-                    onConfirm={handleMenuCompose}
-                    onClose={() => setSelectedMenu(null)}
-                />
-            )}
+            {
+                selectedMenu && (
+                    <MenuCompositionModal
+                        menu={selectedMenu}
+                        products={products}
+                        onConfirm={handleMenuCompose}
+                        onClose={() => setSelectedMenu(null)}
+                    />
+                )
+            }
 
             <CashMovementModal
                 isOpen={isWithdrawModalOpen}
@@ -793,7 +780,7 @@ export const POSPage: React.FC = () => {
                 onConfirm={handleOpenClosure}
                 onClose={handleLogout}
             />
-        </div>
+        </div >
     );
 };
 
