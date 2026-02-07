@@ -7,7 +7,7 @@ import type { Product, CartItem, Cart } from '../types';
 
 interface CartState extends Cart {
     // Actions
-    addItem: (product: Product, quantity?: number) => void;
+    addItem: (product: Product, quantity?: number, menuComponents?: string[]) => void;
     removeItem: (productId: number) => void;
     updateQuantity: (productId: number, quantity: number) => void;
     incrementItem: (productId: number) => void;
@@ -32,7 +32,7 @@ export const useCartStore = create<CartState>((set, get) => ({
     totalAmount: 0,
 
     // Actions
-    addItem: (product, quantity = 1) => {
+    addItem: (product, quantity = 1, menuComponents) => {
         const { items } = get();
         const existingIndex = items.findIndex(item => item.product.id === product.id);
 
@@ -57,6 +57,7 @@ export const useCartStore = create<CartState>((set, get) => ({
                     product,
                     quantity,
                     subtotal: quantity * product.price,
+                    menuComponents, // Store menu components for ticket printing
                 },
             ];
         }

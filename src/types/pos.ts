@@ -11,6 +11,8 @@ export interface CartItem {
     product: Product;
     quantity: number;
     subtotal: number;
+    /** For menus: list of individual product names to print as separate tickets */
+    menuComponents?: string[];
 }
 
 export interface Cart {

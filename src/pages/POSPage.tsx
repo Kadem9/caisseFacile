@@ -166,10 +166,13 @@ export const POSPage: React.FC = () => {
     }, []);
 
     const handleMenuCompose = useCallback((menu: Menu, selectedProducts: { componentId: number; product: Product }[]) => {
+        // Extract product names for individual ticket printing
+        const menuComponentNames = selectedProducts.map(sp => sp.product.name);
+
         // Create a virtual product representing the menu
         const menuProduct: Product = {
             id: menu.id + 100000, // Offset to avoid ID collision
-            name: `${menu.name} (${selectedProducts.map(sp => sp.product.name).join(', ')})`,
+            name: `${menu.name} (${menuComponentNames.join(', ')})`,
             price: menu.price,
             categoryId: 0,
             stockQuantity: 999,
@@ -181,7 +184,8 @@ export const POSPage: React.FC = () => {
             createdAt: new Date(),
             updatedAt: new Date(),
         };
-        addItem(menuProduct);
+        // Pass menu component names for separate ticket printing
+        addItem(menuProduct, 1, menuComponentNames);
         setSelectedMenu(null);
     }, [addItem]);
 
@@ -283,6 +287,7 @@ export const POSPage: React.FC = () => {
 
                 // 2. Print individual tickets for products with printTicket = true
                 // (one ticket per item, no summary receipt)
+                // For menus: print separate tickets for each component
                 const ticketItems = items.filter(item => item.product.printTicket === true);
                 if (ticketItems.length > 0 && printerName) {
                     const { invoke } = await import('@tauri-apps/api/core');
@@ -290,35 +295,65 @@ export const POSPage: React.FC = () => {
                     // Print one ticket per item (if quantity > 1, print multiple tickets)
                     for (const item of ticketItems) {
                         for (let i = 0; i < item.quantity; i++) {
-                            try {
-                                const singleItemReceipt = {
-                                    header: 'TICKET ASMSP',
-                                    items: [{
-                                        name: item.product.name,
-                                        quantity: 1,
-                                        unit_price: item.product.price,
-                                        subtotal: item.product.price,
-                                    }],
-                                    // No total displayed
-                                    total: 0,
-                                    // No payment method
-                                    payment_method: '',
-                                    footer: 'Merci de jeter ce ticket       ',
-                                    transaction_id: transaction.id,
-                                    date: new Date().toLocaleString('fr-FR'),
-                                    // Flag for bigger text in Rust
-                                    big_text: true,
-                                    // Hide total line
-                                    hide_total: true,
-                                };
-                                await invoke('print_via_driver', {
-                                    printerName,
-                                    receipt: singleItemReceipt,
-                                    paperWidth: hardwareConfig.paperWidth ?? 80,
-                                });
-                                console.log(`[POS] Ticket printed for ${item.product.name} (${i + 1}/${item.quantity})`);
-                            } catch (printError) {
-                                console.warn('[POS] Failed to print ticket:', printError);
+                            // Check if this is a menu with components
+                            if (item.menuComponents && item.menuComponents.length > 0) {
+                                // Print a separate ticket for each menu component
+                                for (const componentName of item.menuComponents) {
+                                    try {
+                                        const componentReceipt = {
+                                            header: 'TICKET ASMSP',
+                                            items: [{
+                                                name: componentName,
+                                                quantity: 1,
+                                                unit_price: 0,
+                                                subtotal: 0,
+                                            }],
+                                            total: 0,
+                                            payment_method: '',
+                                            footer: 'Merci de jeter ce ticket       ',
+                                            transaction_id: transaction.id,
+                                            date: new Date().toLocaleString('fr-FR'),
+                                            big_text: true,
+                                            hide_total: true,
+                                        };
+                                        await invoke('print_via_driver', {
+                                            printerName,
+                                            receipt: componentReceipt,
+                                            paperWidth: hardwareConfig.paperWidth ?? 80,
+                                        });
+                                        console.log(`[POS] Menu component ticket printed: ${componentName}`);
+                                    } catch (printError) {
+                                        console.warn('[POS] Failed to print menu component ticket:', printError);
+                                    }
+                                }
+                            } else {
+                                // Regular product - print single ticket
+                                try {
+                                    const singleItemReceipt = {
+                                        header: 'TICKET ASMSP',
+                                        items: [{
+                                            name: item.product.name,
+                                            quantity: 1,
+                                            unit_price: item.product.price,
+                                            subtotal: item.product.price,
+                                        }],
+                                        total: 0,
+                                        payment_method: '',
+                                        footer: 'Merci de jeter ce ticket       ',
+                                        transaction_id: transaction.id,
+                                        date: new Date().toLocaleString('fr-FR'),
+                                        big_text: true,
+                                        hide_total: true,
+                                    };
+                                    await invoke('print_via_driver', {
+                                        printerName,
+                                        receipt: singleItemReceipt,
+                                        paperWidth: hardwareConfig.paperWidth ?? 80,
+                                    });
+                                    console.log(`[POS] Ticket printed for ${item.product.name} (${i + 1}/${item.quantity})`);
+                                } catch (printError) {
+                                    console.warn('[POS] Failed to print ticket:', printError);
+                                }
                             }
                         }
                     }
