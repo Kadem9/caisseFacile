@@ -857,7 +857,7 @@ app.post('/api/sync/menus', (req, res) => {
                                 const productExists = db.prepare('SELECT id FROM products WHERE local_id = ?').get(productId);
                                 if (productExists) {
                                     try {
-                                        insertAllowedProduct.run(componentDbId, productId);
+                                        insertAllowedProduct.run(componentDbId, productExists.id);
                                     } catch (err) {
                                         console.warn(`[Menu Sync] Failed to add product ${productId} to component ${componentDbId}:`, err.message);
                                     }
