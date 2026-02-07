@@ -8,10 +8,10 @@ import type { Product, CartItem, Cart } from '../types';
 interface CartState extends Cart {
     // Actions
     addItem: (product: Product, quantity?: number, menuComponents?: string[]) => void;
-    removeItem: (productId: number) => void;
-    updateQuantity: (productId: number, quantity: number) => void;
-    incrementItem: (productId: number) => void;
-    decrementItem: (productId: number) => void;
+    removeItem: (cartItemId: string) => void;
+    updateQuantity: (cartItemId: string, quantity: number) => void;
+    incrementItem: (cartItemId: string) => void;
+    decrementItem: (cartItemId: string) => void;
     clearCart: () => void;
 }
 
@@ -25,6 +25,14 @@ const calculateTotals = (items: CartItem[]): { totalItems: number; totalAmount: 
     );
 };
 
+// Simple ID generator if crypto.randomUUID is not available (older browsers/environments)
+const generateId = () => {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+        return crypto.randomUUID();
+    }
+    return `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+};
+
 export const useCartStore = create<CartState>((set, get) => ({
     // Initial state
     items: [],
@@ -34,12 +42,29 @@ export const useCartStore = create<CartState>((set, get) => ({
     // Actions
     addItem: (product, quantity = 1, menuComponents) => {
         const { items } = get();
-        const existingIndex = items.findIndex(item => item.product.id === product.id);
+
+        // Find existing item with same ID AND same menu components (if applicable)
+        const existingIndex = items.findIndex(item => {
+            if (item.product.id !== product.id) return false;
+
+            // Compare menu components
+            if (!!item.menuComponents !== !!menuComponents) return false;
+
+            if (item.menuComponents && menuComponents) {
+                if (item.menuComponents.length !== menuComponents.length) return false;
+
+                const sortedItemComps = [...item.menuComponents].sort().join('|');
+                const sortedNewComps = [...menuComponents].sort().join('|');
+                return sortedItemComps === sortedNewComps;
+            }
+
+            return true;
+        });
 
         let newItems: CartItem[];
 
         if (existingIndex >= 0) {
-            // Update existing item
+            // Update existing item - Preserve the original cartItemId
             newItems = items.map((item, index) =>
                 index === existingIndex
                     ? {
@@ -50,14 +75,15 @@ export const useCartStore = create<CartState>((set, get) => ({
                     : item
             );
         } else {
-            // Add new item
+            // Add new item with NEW cartItemId
             newItems = [
                 ...items,
                 {
+                    cartItemId: generateId(),
                     product,
                     quantity,
                     subtotal: quantity * product.price,
-                    menuComponents, // Store menu components for ticket printing
+                    menuComponents,
                 },
             ];
         }
@@ -68,9 +94,9 @@ export const useCartStore = create<CartState>((set, get) => ({
         });
     },
 
-    removeItem: (productId) => {
+    removeItem: (cartItemId) => {
         const { items } = get();
-        const newItems = items.filter(item => item.product.id !== productId);
+        const newItems = items.filter(item => item.cartItemId !== cartItemId);
 
         set({
             items: newItems,
@@ -78,14 +104,14 @@ export const useCartStore = create<CartState>((set, get) => ({
         });
     },
 
-    updateQuantity: (productId, quantity) => {
+    updateQuantity: (cartItemId, quantity) => {
         if (quantity <= 0) {
-            get().removeItem(productId);
+            get().removeItem(cartItemId);
             return;
         }
 
         const { items } = get();
-        const item = items.find(i => i.product.id === productId);
+        const item = items.find(i => i.cartItemId === cartItemId);
 
         // Check stock availability
         if (item && quantity > item.product.stockQuantity) {
@@ -94,7 +120,7 @@ export const useCartStore = create<CartState>((set, get) => ({
         }
 
         const newItems = items.map(item =>
-            item.product.id === productId
+            item.cartItemId === cartItemId
                 ? {
                     ...item,
                     quantity,
@@ -109,27 +135,27 @@ export const useCartStore = create<CartState>((set, get) => ({
         });
     },
 
-    incrementItem: (productId) => {
+    incrementItem: (cartItemId) => {
         const { items } = get();
-        const item = items.find(i => i.product.id === productId);
+        const item = items.find(i => i.cartItemId === cartItemId);
 
         if (item) {
-            // Check if we can increment
+            // Check stock
             if (item.quantity >= item.product.stockQuantity) {
                 alert(`Stock insuffisant pour ${item.product.name}. Il ne reste que ${item.product.stockQuantity} en stock.`);
                 return;
             }
-            get().updateQuantity(productId, item.quantity + 1);
+            get().updateQuantity(cartItemId, item.quantity + 1);
         }
     },
 
-    decrementItem: (productId) => {
+    decrementItem: (cartItemId) => {
         const { items } = get();
-        const item = items.find(i => i.product.id === productId);
+        const item = items.find(i => i.cartItemId === cartItemId);
         if (item && item.quantity > 1) {
-            get().updateQuantity(productId, item.quantity - 1);
+            get().updateQuantity(cartItemId, item.quantity - 1);
         } else if (item) {
-            get().removeItem(productId);
+            get().removeItem(cartItemId);
         }
     },
 

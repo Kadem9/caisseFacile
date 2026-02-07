@@ -139,7 +139,7 @@ export const SettingsPage: React.FC = () => {
     const [deviceName, setDeviceName] = useState(() => localStorage.getItem('ma-caisse-device-name') || 'Caisse Principale');
 
     // Sync Store
-    const { apiUrl, setApiUrl } = useSyncStore();
+    const { apiUrl, setApiUrl, resetSync, isSyncing } = useSyncStore();
     const { products, updateAllProductsPrintTicket } = useProductStore();
 
     // Computed Shortcuts state
@@ -800,6 +800,24 @@ export const SettingsPage: React.FC = () => {
                                         {syncStatus.message}
                                     </div>
                                 )}
+
+                                <div className="settings-form__group">
+                                    <label>Maintenance</label>
+                                    <div style={{ display: 'flex', gap: '10px' }}>
+                                        <Button
+                                            variant="secondary"
+                                            onClick={() => resetSync()}
+                                            disabled={isSyncing}
+                                        >
+                                            <RefreshIcon size={16} className={isSyncing ? "animate-spin mr-2" : "mr-2"} />
+                                            {isSyncing ? 'Synchronisation...' : 'Forcer la synchronisation complète'}
+                                        </Button>
+                                    </div>
+                                    <p className="settings-form__help">
+                                        Utilisez cette option si vous rencontrez des problèmes d'affichage (ex: menus incomplets).
+                                        Cela re-téléchargera toutes les données du serveur.
+                                    </p>
+                                </div>
 
                                 <p style={{ marginTop: '10px', fontSize: '0.85em', color: 'var(--text-muted)' }}>
                                     <LightbulbIcon size={16} className="inline mr-1" />

@@ -95,6 +95,7 @@ export interface SyncState {
     // Getters
     getPendingCount: () => number;
     getQueueByType: (type: SyncEntityType) => SyncQueueItem[];
+    resetSync: () => Promise<void>;
 }
 
 // ===================================
@@ -428,6 +429,13 @@ export const useSyncStore = create<SyncState>()(
             // Get queue items by type
             getQueueByType: (type: SyncEntityType) => {
                 return get().queue.filter(item => item.type === type);
+            },
+
+            // Reset sync state to force full re-sync
+            resetSync: async () => {
+                set({ lastSyncAt: null });
+                console.log('[Sync] Sync timestamp reset. Triggering full sync...');
+                await get().syncAll();
             },
         }),
         {

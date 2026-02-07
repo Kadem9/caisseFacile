@@ -8,6 +8,7 @@ import type { Product, PaymentMethod } from './database';
 // Cart Types
 // ===================================
 export interface CartItem {
+    cartItemId: string; // Unique ID for finding this specific line item
     product: Product;
     quantity: number;
     subtotal: number;

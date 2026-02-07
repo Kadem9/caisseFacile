@@ -1072,9 +1072,10 @@ app.get('/api/sync/diff', (req, res) => {
             // Get allowed products for each component
             const componentsWithProducts = components.map(comp => {
                 const allowedProductIds = db.prepare(`
-                    SELECT product_id as productId
-                    FROM menu_component_products
-                    WHERE component_id = ?
+                    SELECT p.local_id as productId
+                    FROM menu_component_products mcp
+                    JOIN products p ON mcp.product_id = p.id
+                    WHERE mcp.component_id = ?
                 `).all(comp.id).map(p => p.productId);
 
                 return {
@@ -1866,6 +1867,9 @@ app.get('/dashboard', (req, res) => {
         <header>
             <h1>CaisseFacile ASMSP - Dashboard</h1>
             <div style="display: flex; gap: 1rem; align-items: center;">
+                <a href="/reports/sales-breakdown" class="refresh-btn" style="text-decoration: none; display: flex; align-items: center; gap: 0.5rem;">
+                    📊 Stock en direct
+                </a>
                 <span class="status online" id="status">● En ligne</span>
                 <button class="refresh-btn" onclick="loadData()">↻ Actualiser</button>
             </div>
@@ -2949,7 +2953,7 @@ app.post('/api/admin/clear-data', (req, res) => {
 });
 
 // ===================================
-// Detailed Sales Report & Stock (Server-Side)
+// Detailed Sales Report & Stock (Server-Side HTML)
 // ===================================
 
 app.get('/reports/sales-breakdown', (req, res) => {
@@ -2968,8 +2972,9 @@ app.get('/reports/sales-breakdown', (req, res) => {
         `).all(startDate, endDate);
 
         // 2. Load Definitions
-        const products = db.prepare('SELECT id, local_id, name, price, stock_quantity FROM products').all();
+        const products = db.prepare('SELECT id, local_id, name, price, stock_quantity, category_id FROM products').all();
         const menus = db.prepare('SELECT id, local_id, name FROM menus').all();
+        const categories = db.prepare('SELECT id, local_id, name FROM categories').all();
 
         // Map for quick lookup
         const productMap = {}; // ID -> Product
@@ -2984,8 +2989,13 @@ app.get('/reports/sales-breakdown', (req, res) => {
             menuMap[m.local_id] = m;
         });
 
+        const categoryMap = {};
+        categories.forEach(c => {
+            categoryMap[c.id] = c.name;
+            if (c.local_id) categoryMap[c.local_id] = c.name;
+        });
+
         // 3. Load Menu Components Structure
-        // Get components for each menu
         const menuComponents = db.prepare(`
             SELECT mc.menu_id, mc.id as component_id, mc.label, mc.quantity as comp_qty,
                    mcp.product_id
@@ -2993,7 +3003,7 @@ app.get('/reports/sales-breakdown', (req, res) => {
             LEFT JOIN menu_component_products mcp ON mc.id = mcp.component_id
         `).all();
 
-        // Build efficient structure: MenuID -> List of Components, where Component -> List of ProductIDs
+        // Build efficient structure: MenuID -> List of Components
         const menuStructure = {};
         menuComponents.forEach(row => {
             if (!menuStructure[row.menu_id]) {
@@ -3012,27 +3022,24 @@ app.get('/reports/sales-breakdown', (req, res) => {
         });
 
         // 4. Initialize Stats
-        // ProductID -> { name, directSales, menuSales, currentStock }
         const stats = {};
-
-        // Initialize with all products (even 0 sales)
         products.forEach(p => {
             stats[p.local_id] = {
+                id: p.local_id,
                 name: p.name,
-                directSales: 0,
-                menuSales: 0, // Confirmed (Fixed)
-                potentialSales: 0, // Variable (Choice)
-                currentStock: p.stock_quantity // This is "Initial - DirectSales" roughly
+                category: categoryMap[p.category_id] || '-',
+                sales: { direct: 0, menuFixed: 0, menuVariable: 0 },
+                currentStock: p.stock_quantity
             };
         });
 
         // 5. Process Transactions
+        const nameToLocalId = {};
+        products.forEach(p => nameToLocalId[p.name] = p.local_id);
+
         transactions.forEach(tx => {
             let items = [];
-            try {
-                items = JSON.parse(tx.items);
-            } catch (e) { return; }
-
+            try { items = JSON.parse(tx.items); } catch (e) { return; }
             if (!Array.isArray(items)) return;
 
             items.forEach(item => {
@@ -3042,38 +3049,46 @@ app.get('/reports/sales-breakdown', (req, res) => {
                 // Case A: Direct Product
                 if (pid < 100000) {
                     if (stats[pid]) {
-                        stats[pid].directSales += qty;
+                        stats[pid].sales.direct += qty;
                     }
                 }
                 // Case B: Menu
                 else {
                     const menuLocalId = pid - 100000;
-                    // Find structure (using local_id which usually matches DB id 1:1 in single server setup)
                     const menu = menuMap[menuLocalId];
-                    // If not found by local_id, try finding by ID in structure directly if mapped
-                    // Note: Menu structure uses DB IDs. 
-                    // Let's assume menuLocalId maps to menu.id
                     const menuDbId = menu ? menu.id : null;
 
-                    if (menuDbId && menuStructure[menuDbId]) {
+                    // NEW LOGIC: Use explicit menu components if available (from frontend)
+                    if (item.menuComponents && Array.isArray(item.menuComponents) && item.menuComponents.length > 0) {
+                        item.menuComponents.forEach(compName => {
+                            const pLocalId = nameToLocalId[compName];
+                            if (pLocalId && stats[pLocalId]) {
+                                // Count as 'Menu Sales' (Fixed or Variable doesn't matter, it's sold)
+                                // We put it in 'menuFixed' to be counted in Total Sales
+                                stats[pLocalId].sales.menuFixed += qty;
+                            }
+                        });
+                    }
+                    // FALLBACK LOGIC: Estimate from Menu Structure (if no explicit components)
+                    else if (menuDbId && menuStructure[menuDbId]) {
                         const components = menuStructure[menuDbId];
                         Object.values(components).forEach(comp => {
                             const totalQtyNeeded = qty * comp.quantity;
 
-                            // If strictly one product in this component -> It's Fixed
+                            // Fixed: Only 1 product in component
                             if (comp.productIds.length === 1) {
                                 const pDbId = comp.productIds[0];
                                 const pLocalId = productMap[pDbId]?.local_id;
                                 if (pLocalId && stats[pLocalId]) {
-                                    stats[pLocalId].menuSales += totalQtyNeeded;
+                                    stats[pLocalId].sales.menuFixed += totalQtyNeeded;
                                 }
                             }
-                            // If multiple products -> It's a Choice
+                            // Variable: Multiple products
                             else if (comp.productIds.length > 1) {
                                 comp.productIds.forEach(pDbId => {
                                     const pLocalId = productMap[pDbId]?.local_id;
                                     if (pLocalId && stats[pLocalId]) {
-                                        stats[pLocalId].potentialSales += totalQtyNeeded;
+                                        stats[pLocalId].sales.menuVariable += totalQtyNeeded;
                                     }
                                 });
                             }
@@ -3086,80 +3101,110 @@ app.get('/reports/sales-breakdown', (req, res) => {
         // 6. Generate HTML
         let html = `
         <!DOCTYPE html>
-        <html>
+        <html lang="fr">
         <head>
+            <meta charset="UTF-8">
             <title>Rapport Détaillé - ${targetDate}</title>
             <meta name="viewport" content="width=device-width, initial-scale=1">
             <style>
-                body { font-family: sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; background: #f0f2f5; }
-                .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-                h1 { color: #1a202c; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
-                table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                th, td { padding: 12px; border-bottom: 1px solid #e2e8f0; text-align: left; }
-                th { background-color: #f8fafc; color: #475569; font-weight: 600; }
-                tr:hover { background-color: #f1f5f9; }
-                .stock-ok { color: #166534; font-weight: bold; }
-                .stock-low { color: #b91c1c; font-weight: bold; }
-                .warning { color: #d97706; font-size: 0.9em; }
-                .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-                .btn { padding: 8px 16px; background: #3b82f6; color: white; text-decoration: none; border-radius: 6px; font-weight: 500; transition: background 0.2s; }
-                .btn:hover { background: #2563eb; }
-                .total-highlight { background-color: #e0f2fe; }
+                :root { --primary: #2563eb; --bg: #f8fafc; --card: #ffffff; --text: #1e293b; --border: #e2e8f0; }
+                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; margin: 0; padding: 20px; }
+                .container { max-width: 1000px; margin: 0 auto; }
+                .card { background: var(--card); border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 24px; margin-bottom: 24px; }
+                h1 { margin: 0 0 20px 0; font-size: 1.5rem; display: flex; align-items: center; gap: 10px; }
+                .controls { display: flex; gap: 10px; align-items: center; margin-bottom: 24px; background: #fff; padding: 16px; border-radius: 8px; border: 1px solid var(--border); }
+                input[type="date"] { padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 1rem; }
+                button { background: var(--primary); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 1rem; }
+                button:hover { opacity: 0.9; }
+                table { width: 100%; border-collapse: collapse; }
+                th { text-align: left; padding: 12px; background: #f1f5f9; font-weight: 600; font-size: 0.875rem; color: #475569; position: sticky; top: 0; }
+                td { padding: 12px; border-bottom: 1px solid var(--border); font-size: 0.95rem; }
+                tr:last-child td { border-bottom: none; }
+                .amount { font-family: monospace; font-weight: 600; }
+                .total-row { background: #eff6ff; }
+                .stock-low { color: #dc2626; font-weight: bold; }
+                .stock-ok { color: #16a34a; font-weight: bold; }
+                .badge { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 0.75rem; font-weight: 500; background: #e2e8f0; color: #475569; }
+                .variable { color: #d97706; font-size: 0.85em; }
             </style>
         </head>
         <body>
-            <div class="card">
-                <div class="header">
-                    <h1>Rapport de Stock Temps Réel</h1>
-                    <a href="/reports/sales-breakdown?date=${targetDate}" class="btn">Actualiser</a>
-                </div>
-                <p>Date: <strong>${targetDate}</strong></p>
-                
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Produit</th>
-                            <th>Ventes<br><small>(Direct + Menu)</small></th>
-                            <th>Stock Théorique<br><small>(Base - Ventes)</small></th>
-                            <th>Incertain<br><small>(Choix multiples)</small></th>
-                        </tr>
-                    </thead>
-                    <tbody>
+            <div class="container">
+                <div class="card">
+                    <h1>📊 Rapport Détaillé des Ventes</h1>
+                    
+                    <form class="controls" action="/reports/sales-breakdown" method="GET">
+                        <label for="date">Date du rapport :</label>
+                        <input type="date" id="date" name="date" value="${targetDate}" required>
+                        <button type="submit">Actualiser</button>
+                    </form>
+
+                    <div style="overflow-x: auto;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Produit</th>
+                                    <th>Catégorie</th>
+                                    <th style="text-align: right;">Total Ventes</th>
+                                    <th style="text-align: right;">Détail (Direct + Menu)</th>
+                                    <th style="text-align: right;">Incertain (Choix)</th>
+                                    <th style="text-align: right;">Stock Estimé</th>
+                                </tr>
+                            </thead>
+                            <tbody>
         `;
 
         // Sort by Total Sales desc
-        const sortedStats = Object.values(stats).sort((a, b) => (b.directSales + b.menuSales) - (a.directSales + a.menuSales));
+        const sortedStats = Object.values(stats).sort((a, b) =>
+            (b.sales.direct + b.sales.menuFixed) - (a.sales.direct + a.sales.menuFixed)
+        );
+
+        let hasData = false;
 
         sortedStats.forEach(s => {
-            // Only show if there is activity or stock
-            if (s.directSales === 0 && s.menuSales === 0 && s.potentialSales === 0 && s.currentStock === 0) return;
+            const totalCertain = s.sales.direct + s.sales.menuFixed;
 
-            const totalCertain = s.directSales + s.menuSales;
-            // Estimated Remaining logic:
-            // DB Stock usually reflects (Initial - DirectSales).
-            // So Real Remaining = DB Stock - MenuSales.
-            const estimatedRemaining = s.currentStock - s.menuSales;
+            // Show if any activity or stock is tracked
+            if (totalCertain === 0 && s.sales.menuVariable === 0 && s.currentStock === 0) return;
 
+            hasData = true;
+            const estimatedRemaining = s.currentStock - s.sales.menuFixed;
             const stockClass = estimatedRemaining <= 5 ? 'stock-low' : 'stock-ok';
 
             html += `
                 <tr>
-                    <td>${s.name}</td>
-                    <td class="total-highlight"><strong>${totalCertain}</strong> <small>(${s.directSales} + ${s.menuSales})</small></td>
-                    <td class="${stockClass}">${estimatedRemaining}</td>
-                    <td><span class="warning">${s.potentialSales > 0 ? '+' + s.potentialSales + ' ?' : '-'}</span></td>
+                    <td><strong>${s.name}</strong></td>
+                    <td><span class="badge">${s.category}</span></td>
+                    <td style="text-align: right;" class="amount">${totalCertain}</td>
+                    <td style="text-align: right;">
+                        <small style="color: #64748b;">${s.sales.direct} (Direct) + ${s.sales.menuFixed} (Menu)</small>
+                    </td>
+                    <td style="text-align: right;">
+                        ${s.sales.menuVariable > 0 ? `<span class="variable">+${s.sales.menuVariable}?</span>` : '-'}
+                    </td>
+                    <td style="text-align: right;" class="${stockClass}">${estimatedRemaining}</td>
                 </tr>
             `;
         });
 
+        if (!hasData) {
+            html += `<tr><td colspan="6" style="text-align: center; padding: 40px; color: #64748b;">Aucune vente enregistrée pour cette date.</td></tr>`;
+        }
+
         html += `
-                    </tbody>
-                </table>
-                <p style="margin-top: 20px; font-size: 0.8em; color: #666;">
-                    * <strong>Ventes</strong>: Somme des ventes directes et des articles fixes dans les menus (ex: Merguez dans Menu Merguez).<br>
-                    * <strong>Stock Théorique</strong>: Calculé en soustrayant les ventes via menus du stock affiché en base.<br>
-                    * <strong>Incertain</strong>: Articles au choix dans les menus (ex: Boisson au choix).
-                </p>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div style="margin-top: 20px; font-size: 0.85rem; color: #64748b; background: #f8fafc; padding: 15px; border-radius: 8px;">
+                        <p style="margin: 0 0 5px 0;"><strong>ℹ️ Guide de lecture :</strong></p>
+                        <ul style="margin: 0; padding-left: 20px;">
+                            <li><strong>Total Ventes</strong> : Somme des ventes unitaires et des produits inclus d'office dans les menus (ex: Merguez dans Menu Merguez).</li>
+                            <li><strong>Stock Estimé</strong> : Stock Base de Données - Ventes via Menus (car les ventes directes sont déjà déduites par la caisse).</li>
+                            <li><strong>Incertain</strong> : Produits "au choix" dans les menus (ex: Boisson au choix). On ne peut pas savoir lequel a été pris exactement sans saisie caissier.</li>
+                        </ul>
+                    </div>
+                </div>
             </div>
         </body>
         </html>
@@ -3170,6 +3215,312 @@ app.get('/reports/sales-breakdown', (req, res) => {
     } catch (error) {
         console.error('Report error:', error);
         res.status(500).send('Erreur: ' + error.message);
+    }
+});
+
+// ===================================
+// Detailed Sales Report & Stock (JSON API)
+// ===================================
+
+app.get('/api/reports/detailed-sales', (req, res) => {
+    try {
+        const { date } = req.query;
+        // Default to today if no date provided
+        const targetDate = date || new Date().toISOString().split('T')[0];
+
+        // 1. Get all transactions for the date
+        const startDate = `${targetDate} 00:00:00`;
+        const endDate = `${targetDate} 23:59:59`;
+
+        const transactions = db.prepare(`
+            SELECT items FROM transactions 
+            WHERE created_at BETWEEN ? AND ?
+        `).all(startDate, endDate);
+
+        // 2. Load Definitions
+        const products = db.prepare('SELECT id, local_id, name, price, stock_quantity, category_id FROM products').all();
+        const menus = db.prepare('SELECT id, local_id, name FROM menus').all();
+        const categories = db.prepare('SELECT id, local_id, name FROM categories').all();
+
+        // Map for quick lookup
+        const productMap = {}; // ID -> Product
+        products.forEach(p => {
+            productMap[p.id] = p;
+            productMap[p.local_id] = p;
+        });
+
+        const menuMap = {}; // ID -> Menu
+        menus.forEach(m => {
+            menuMap[m.id] = m;
+            menuMap[m.local_id] = m;
+        });
+
+        const categoryMap = {}; // ID -> Category Name
+        categories.forEach(c => {
+            categoryMap[c.id] = c.name;
+            if (c.local_id) categoryMap[c.local_id] = c.name;
+        });
+
+        // 3. Load Menu Components Structure
+        const menuComponents = db.prepare(`
+            SELECT mc.menu_id, mc.id as component_id, mc.label, mc.quantity as comp_qty,
+                   mcp.product_id
+            FROM menu_components mc
+            LEFT JOIN menu_component_products mcp ON mc.id = mcp.component_id
+        `).all();
+
+        // Build efficient structure: MenuID -> List of Components
+        const menuStructure = {};
+        menuComponents.forEach(row => {
+            if (!menuStructure[row.menu_id]) {
+                menuStructure[row.menu_id] = {};
+            }
+            if (!menuStructure[row.menu_id][row.component_id]) {
+                menuStructure[row.menu_id][row.component_id] = {
+                    label: row.label,
+                    quantity: row.comp_qty,
+                    productIds: []
+                };
+            }
+            if (row.product_id) {
+                menuStructure[row.menu_id][row.component_id].productIds.push(row.product_id);
+            }
+        });
+
+        // 4. Initialize Stats
+        const stats = {};
+        products.forEach(p => {
+            stats[p.local_id] = {
+                id: p.local_id,
+                name: p.name,
+                category: categoryMap[p.category_id] || 'Non catégorisé',
+                stockInitial: p.stock_quantity, // Roughly initial before direct sales
+                sales: {
+                    direct: 0,
+                    menuFixed: 0,
+                    menuVariable: 0 // Count of times it was a potential choice
+                }
+            };
+        });
+
+        // 5. Process Transactions
+        transactions.forEach(tx => {
+            let items = [];
+            try { items = JSON.parse(tx.items); } catch (e) { return; }
+            if (!Array.isArray(items)) return;
+
+            items.forEach(item => {
+                const qty = item.quantity || 1;
+                const pid = item.product?.id || item.product?.localId || item.productId || item.id;
+
+                // Case A: Direct Product
+                if (pid < 100000) {
+                    if (stats[pid]) {
+                        stats[pid].sales.direct += qty;
+                    }
+                }
+                // Case B: Menu
+                else {
+                    const menuLocalId = pid - 100000;
+                    const menu = menuMap[menuLocalId];
+                    const menuDbId = menu ? menu.id : null;
+
+                    if (menuDbId && menuStructure[menuDbId]) {
+                        const components = menuStructure[menuDbId];
+                        Object.values(components).forEach(comp => {
+                            const totalQtyNeeded = qty * comp.quantity;
+
+                            // Fixed: Only 1 product in component
+                            if (comp.productIds.length === 1) {
+                                const pDbId = comp.productIds[0];
+                                const pLocalId = productMap[pDbId]?.local_id;
+                                if (pLocalId && stats[pLocalId]) {
+                                    stats[pLocalId].sales.menuFixed += totalQtyNeeded;
+                                }
+                            }
+                            // Variable: Multiple products
+                            else if (comp.productIds.length > 1) {
+                                comp.productIds.forEach(pDbId => {
+                                    const pLocalId = productMap[pDbId]?.local_id;
+                                    if (pLocalId && stats[pLocalId]) {
+                                        // We record it as potential
+                                        stats[pLocalId].sales.menuVariable += totalQtyNeeded;
+                                    }
+                                });
+                            }
+                        });
+                    }
+                }
+            });
+        });
+
+        // Format response
+        const report = Object.values(stats).map(s => ({
+            ...s,
+            totalCertain: s.sales.direct + s.sales.menuFixed,
+            estimatedRemaining: s.stockInitial - s.sales.menuFixed
+            // DB Stock (stockInitial here) is decremented by POS for direct sales.
+            // So Real Remaining = (Initial - Direct) - MenuFixed = DBStock - MenuFixed.
+        })).sort((a, b) => b.totalCertain - a.totalCertain);
+
+        res.json({
+            date: targetDate,
+            items: report
+        });
+
+    } catch (error) {
+        console.error('Report error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ===================================
+// Product Sales Report API (JSON for Frontend)
+// ===================================
+
+app.get('/api/reports/product-sales', (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+
+        if (!startDate || !endDate) {
+            return res.status(400).json({ error: 'startDate and endDate are required' });
+        }
+
+        const queryStartDate = `${startDate} 00:00:00`;
+        const queryEndDate = `${endDate} 23:59:59`;
+
+        // 1. Get transactions
+        const transactions = db.prepare(`
+            SELECT items FROM transactions 
+            WHERE created_at BETWEEN ? AND ?
+        `).all(queryStartDate, queryEndDate);
+
+        // 2. Load Definitions
+        const products = db.prepare('SELECT id, local_id, name, price, stock_quantity, category_id FROM products').all();
+        const menus = db.prepare('SELECT id, local_id, name FROM menus').all();
+        const categories = db.prepare('SELECT id, local_id, name FROM categories').all();
+
+        const productMap = {};
+        products.forEach(p => {
+            productMap[p.id] = p;
+            productMap[p.local_id] = p;
+        });
+
+        const menuMap = {};
+        menus.forEach(m => {
+            menuMap[m.id] = m;
+            menuMap[m.local_id] = m;
+        });
+
+        const categoryMap = {};
+        categories.forEach(c => {
+            categoryMap[c.id] = c.name;
+            if (c.local_id) categoryMap[c.local_id] = c.name;
+        });
+
+        // 3. Load Menu Structure
+        const menuComponents = db.prepare(`
+            SELECT mc.menu_id, mc.id as component_id, mc.label, mc.quantity as comp_qty,
+                   mcp.product_id
+            FROM menu_components mc
+            LEFT JOIN menu_component_products mcp ON mc.id = mcp.component_id
+        `).all();
+
+        const menuStructure = {};
+        menuComponents.forEach(row => {
+            if (!menuStructure[row.menu_id]) menuStructure[row.menu_id] = {};
+            if (!menuStructure[row.menu_id][row.component_id]) {
+                menuStructure[row.menu_id][row.component_id] = {
+                    quantity: row.comp_qty,
+                    productIds: []
+                };
+            }
+            if (row.product_id) {
+                menuStructure[row.menu_id][row.component_id].productIds.push(row.product_id);
+            }
+        });
+
+        // 4. Initialize Stats
+        const stats = {};
+        products.forEach(p => {
+            stats[p.local_id] = {
+                id: p.local_id,
+                name: p.name,
+                category: categoryMap[p.category_id] || '-',
+                sales: { direct: 0, menuFixed: 0, menuVariable: 0 },
+                currentStock: p.stock_quantity
+            };
+        });
+
+        // 5. Process Transactions
+        const nameToLocalId = {};
+        products.forEach(p => nameToLocalId[p.name] = p.local_id);
+
+        transactions.forEach(tx => {
+            let items = [];
+            try { items = JSON.parse(tx.items); } catch (e) { return; }
+            if (!Array.isArray(items)) return;
+
+            items.forEach(item => {
+                const qty = item.quantity || 1;
+                const pid = item.product?.id || item.product?.localId || item.productId || item.id;
+
+                // Case A: Direct Product
+                if (pid < 100000) {
+                    if (stats[pid]) {
+                        stats[pid].sales.direct += qty;
+                    }
+                }
+                // Case B: Menu
+                else {
+                    const menuLocalId = pid - 100000;
+                    const menu = menuMap[menuLocalId];
+                    const menuDbId = menu ? menu.id : null;
+
+                    // NEW LOGIC: Use explicit menu components if available
+                    if (item.menuComponents && Array.isArray(item.menuComponents) && item.menuComponents.length > 0) {
+                        item.menuComponents.forEach(compName => {
+                            const pLocalId = nameToLocalId[compName];
+                            if (pLocalId && stats[pLocalId]) {
+                                stats[pLocalId].sales.menuFixed += qty;
+                            }
+                        });
+                    }
+                    // FALLBACK LOGIC: Estimate from Menu Structure
+                    else if (menuDbId && menuStructure[menuDbId]) {
+                        const components = menuStructure[menuDbId];
+                        Object.values(components).forEach(comp => {
+                            const totalQtyNeeded = qty * comp.quantity;
+                            if (comp.productIds.length === 1) {
+                                const pDbId = comp.productIds[0];
+                                const pLocalId = productMap[pDbId]?.local_id;
+                                if (pLocalId && stats[pLocalId]) {
+                                    stats[pLocalId].sales.menuFixed += totalQtyNeeded;
+                                }
+                            } else if (comp.productIds.length > 1) {
+                                comp.productIds.forEach(pDbId => {
+                                    const pLocalId = productMap[pDbId]?.local_id;
+                                    if (pLocalId && stats[pLocalId]) {
+                                        stats[pLocalId].sales.menuVariable += totalQtyNeeded;
+                                    }
+                                });
+                            }
+                        });
+                    }
+                }
+            });
+        });
+
+        // 6. Return JSON
+        const result = Object.values(stats)
+            .filter(s => s.sales.direct > 0 || s.sales.menuFixed > 0 || s.sales.menuVariable > 0 || s.currentStock > 0)
+            .sort((a, b) => b.sales.direct + b.sales.menuFixed - (a.sales.direct + a.sales.menuFixed));
+
+        res.json(result);
+
+    } catch (error) {
+        console.error('Product Sales Report API Error:', error);
+        res.status(500).json({ error: error.message });
     }
 });
 

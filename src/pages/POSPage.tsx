@@ -165,27 +165,29 @@ export const POSPage: React.FC = () => {
         setSelectedMenu(menu);
     }, []);
 
-    const handleMenuCompose = useCallback((menu: Menu, selectedProducts: { componentId: number; product: Product }[]) => {
-        // Extract product names for individual ticket printing
-        const menuComponentNames = selectedProducts.map(sp => sp.product.name);
+    const handleMenuCompose = useCallback((menu: Menu, allSelections: { componentId: number; product: Product }[][]) => {
+        allSelections.forEach(selectedProducts => {
+            // Extract product names for individual ticket printing
+            const menuComponentNames = selectedProducts.map(sp => sp.product.name);
 
-        // Create a virtual product representing the menu
-        const menuProduct: Product = {
-            id: menu.id + 100000, // Offset to avoid ID collision
-            name: `${menu.name} (${menuComponentNames.join(', ')})`,
-            price: menu.price,
-            categoryId: 0,
-            stockQuantity: 999,
-            alertThreshold: 0,
-            isActive: true,
-            printTicket: true,
-            sortOrder: 0,
-            imagePath: menu.imagePath, // Ajouter l'image du menu
-            createdAt: new Date(),
-            updatedAt: new Date(),
-        };
-        // Pass menu component names for separate ticket printing
-        addItem(menuProduct, 1, menuComponentNames);
+            // Create a virtual product representing the menu
+            const menuProduct: Product = {
+                id: menu.id + 100000, // Offset to avoid ID collision
+                name: `${menu.name} (${menuComponentNames.join(', ')})`,
+                price: menu.price,
+                categoryId: 0,
+                stockQuantity: 999,
+                alertThreshold: 0,
+                isActive: true,
+                printTicket: true,
+                sortOrder: 0,
+                imagePath: menu.imagePath, // Ajouter l'image du menu
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            };
+            // Pass menu component names for separate ticket printing
+            addItem(menuProduct, 1, menuComponentNames);
+        });
         setSelectedMenu(null);
     }, [addItem]);
 
@@ -235,12 +237,8 @@ export const POSPage: React.FC = () => {
             changeGiven: paymentResult.changeGiven,
             items: transactionItems.map(item => ({
                 product: { id: item.product.id },
-                quantity: item.quantity
-                // Note: backend sync mostly relies on `totalAmount` but if we want per-item detail 
-                // to reflect free, we might need to send unitPrice/subtotal if the backend supports it.
-                // Looking at server.js, it just JSON.stringifies items.
-                // So adding unitPrice/subtotal here is good practice if backend stores it.
-                // Server schema doesn't force structure, but client store does.
+                quantity: item.quantity,
+                menuComponents: item.menuComponents // Important for backend sales report
             })),
             createdAt: new Date().toISOString(),
         };
@@ -696,7 +694,7 @@ export const POSPage: React.FC = () => {
                             items.map((item) => {
                                 const isMenu = item.product.id >= 100000;
                                 return (
-                                    <div key={item.product.id} className="pos-cart__item">
+                                    <div key={item.cartItemId} className="pos-cart__item">
                                         {item.product.imagePath ? (
                                             <div className="pos-cart__item-image-wrapper">
                                                 <CachedImage
@@ -723,7 +721,7 @@ export const POSPage: React.FC = () => {
                                         <div className="pos-cart__item-controls">
                                             <button
                                                 className="pos-cart__item-btn"
-                                                onClick={() => decrementItem(item.product.id)}
+                                                onClick={() => decrementItem(item.cartItemId)}
                                                 type="button"
                                             >
                                                 <MinusIcon size={16} />
@@ -731,14 +729,14 @@ export const POSPage: React.FC = () => {
                                             <span className="pos-cart__item-qty">{item.quantity}</span>
                                             <button
                                                 className="pos-cart__item-btn"
-                                                onClick={() => incrementItem(item.product.id)}
+                                                onClick={() => incrementItem(item.cartItemId)}
                                                 type="button"
                                             >
                                                 <PlusIcon size={16} />
                                             </button>
                                             <button
                                                 className="pos-cart__item-btn pos-cart__item-btn--danger"
-                                                onClick={() => removeItem(item.product.id)}
+                                                onClick={() => removeItem(item.cartItemId)}
                                                 type="button"
                                             >
                                                 <TrashIcon size={16} />

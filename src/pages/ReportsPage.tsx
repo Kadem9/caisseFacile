@@ -17,14 +17,14 @@ import {
     DownloadIcon
 } from '../components/ui';
 import { useTransactionStore, useProductStore, useClosureStore, useAuthStore } from '../stores';
-import { fetchTransactions, type TransactionData } from '../services/api';
+import { fetchTransactions, fetchProductSales, type TransactionData, type ProductSalesData } from '../services/api';
 import { generateDailyReport, generateStockReport, exportTransactionsToCSV, downloadCSV } from '../utils';
 import { generateClosurePDF } from '../services/pdfService';
 import type { CashClosureWithDetails } from '../types';
 import './ReportsPage.css';
 
 type TimeFilter = 'today' | 'week' | 'month';
-type Tab = 'stats' | 'history';
+type Tab = 'stats' | 'history' | 'detailed';
 
 export const ReportsPage: React.FC = () => {
     const navigate = useNavigate();
@@ -38,6 +38,30 @@ export const ReportsPage: React.FC = () => {
     const [backendTransactions, setBackendTransactions] = useState<TransactionData[]>([]);
     const [_isLoading, setIsLoading] = useState(true);
     const [_error, setError] = useState<string | null>(null);
+
+    // Product Sales State
+    const [productSales, setProductSales] = useState<ProductSalesData[]>([]);
+    const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+    const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+    const [isSalesLoading, setIsSalesLoading] = useState(false);
+
+    // Fetch Product Sales
+    useEffect(() => {
+        if (activeTab === 'detailed') {
+            const loadSales = async () => {
+                try {
+                    setIsSalesLoading(true);
+                    const data = await fetchProductSales(startDate, endDate);
+                    setProductSales(data);
+                } catch (err) {
+                    console.error('Failed to fetch product sales:', err);
+                } finally {
+                    setIsSalesLoading(false);
+                }
+            };
+            loadSales();
+        }
+    }, [activeTab, startDate, endDate]);
 
     // Fetch transactions from backend
     useEffect(() => {
@@ -246,6 +270,12 @@ export const ReportsPage: React.FC = () => {
                     <ChartIcon size={18} /> Statistiques
                 </button>
                 <button
+                    className={`reports-tab ${activeTab === 'detailed' ? 'reports-tab--active' : ''}`}
+                    onClick={() => setActiveTab('detailed')}
+                >
+                    <PackageIcon size={18} /> Ventes par produit
+                </button>
+                <button
                     className={`reports-tab ${activeTab === 'history' ? 'reports-tab--active' : ''}`}
                     onClick={() => setActiveTab('history')}
                 >
@@ -254,8 +284,69 @@ export const ReportsPage: React.FC = () => {
             </div>
 
             <main className="reports-main">
-                {activeTab === 'history' ? (
+                {activeTab === 'detailed' ? (
+                    <div className="reports-section">
+                        <div className="report-section__header">
+                            <h2 className="report-section__title">
+                                <PackageIcon size={20} className="inline mr-2" />
+                                Détail des Ventes par Produit
+                            </h2>
+                            <div className="report-section__actions" style={{ gap: '10px' }}>
+                                <input
+                                    type="date"
+                                    value={startDate}
+                                    onChange={(e) => setStartDate(e.target.value)}
+                                    className="p-2 border rounded"
+                                />
+                                <span className="self-center">à</span>
+                                <input
+                                    type="date"
+                                    value={endDate}
+                                    onChange={(e) => setEndDate(e.target.value)}
+                                    className="p-2 border rounded"
+                                />
+                            </div>
+                        </div>
+                        <div className="report-section__body">
+                            {isSalesLoading ? (
+                                <div className="p-8 text-center text-gray-500">Chargement...</div>
+                            ) : productSales.length > 0 ? (
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="border-b border-gray-200 bg-gray-50">
+                                            <th className="p-3 font-medium text-gray-600">Catégorie</th>
+                                            <th className="p-3 font-medium text-gray-600">Produit</th>
+                                            <th className="p-3 font-medium text-right text-gray-600">Direct</th>
+                                            <th className="p-3 font-medium text-right text-gray-600">Menu (Fixe)</th>
+                                            <th className="p-3 font-medium text-right text-gray-600">Menu (Var.)</th>
+                                            <th className="p-3 font-medium text-right text-gray-600">Total Ventes</th>
+                                            <th className="p-3 font-medium text-right text-gray-600">Stock Actuel</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {productSales.map((item) => (
+                                            <tr key={item.id} className="border-b border-gray-100 hover:bg-gray-50">
+                                                <td className="p-3 text-sm text-gray-500">{item.category}</td>
+                                                <td className="p-3 font-medium">{item.name}</td>
+                                                <td className="p-3 text-right">{item.sales.direct}</td>
+                                                <td className="p-3 text-right">{item.sales.menuFixed}</td>
+                                                <td className="p-3 text-right text-orange-500">{item.sales.menuVariable > 0 ? item.sales.menuVariable : '-'}</td>
+                                                <td className="p-3 text-right font-bold">{item.sales.direct + item.sales.menuFixed}</td>
+                                                <td className={`p-3 text-right font-medium ${item.currentStock <= 5 ? 'text-red-500' : 'text-green-600'}`}>
+                                                    {item.currentStock}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            ) : (
+                                <div className="p-8 text-center text-gray-500">Aucune vente sur cette période.</div>
+                            )}
+                        </div>
+                    </div>
+                ) : activeTab === 'history' ? (
                     <div className="reports-section closure-history-section">
+                        {/* ... existing history content ... */}
                         <div className="report-section__header">
                             <h2 className="report-section__title">
                                 <HistoryIcon size={20} className="inline mr-2" />

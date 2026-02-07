@@ -492,3 +492,28 @@ export const clearAllData = async (): Promise<ApiResponse> => {
     });
     return response.json();
 };
+
+// ===================================
+// Product Sales Report
+// ===================================
+
+export interface ProductSalesData {
+    id: number;
+    name: string;
+    category: string;
+    sales: {
+        direct: number;
+        menuFixed: number;
+        menuVariable: number;
+    };
+    currentStock: number;
+    totalCertain: number;
+}
+
+export async function fetchProductSales(startDate: string, endDate: string): Promise<ProductSalesData[]> {
+    const response = await fetch(`${getApiUrl()}/api/reports/product-sales?startDate=${startDate}&endDate=${endDate}`);
+    if (!response.ok) {
+        throw new Error('Erreur lors de la récupération du rapport');
+    }
+    return response.json();
+}
