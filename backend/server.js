@@ -1457,13 +1457,31 @@ app.get('/api/transactions', (req, res) => {
             productMap[p.local_id] = p;
         });
 
+        // Get all menus for menu resolution (menus have virtual IDs: 100000 + menu.local_id)
+        const menus = db.prepare('SELECT id, local_id, name, price FROM menus').all();
+        const menuMap = {};
+        menus.forEach(m => {
+            menuMap[m.id] = m;
+            menuMap[m.local_id] = m;
+        });
+
         // Resolve product names in items
         const resolveItems = (items) => {
             if (!items) return [];
             const parsed = typeof items === 'string' ? JSON.parse(items) : items;
             return parsed.map(item => {
                 const productId = item.product?.id || item.product?.localId || item.productId || item.id;
-                const product = productMap[productId];
+                let product = productMap[productId];
+
+                // If not found and ID > 100000, it's likely a menu (virtual ID = 100000 + menu.local_id)
+                if (!product && productId >= 100000) {
+                    const menuLocalId = productId - 100000;
+                    const menu = menuMap[menuLocalId];
+                    if (menu) {
+                        product = { name: menu.name, price: menu.price };
+                    }
+                }
+
                 return {
                     name: product?.name || item.name || item.productName || 'Produit inconnu',
                     quantity: item.quantity || 1,
@@ -2133,13 +2151,31 @@ app.get('/api/z-caisse', (req, res) => {
             productMap[p.local_id] = { ...p, categoryName: categoryMap[p.category_id] || 'Non catégorisé' };
         });
 
+        // Get all menus for menu resolution (menus have virtual IDs: 100000 + menu.local_id)
+        const menus = db.prepare('SELECT id, local_id, name, price FROM menus').all();
+        const menuMap = {};
+        menus.forEach(m => {
+            menuMap[m.id] = m;
+            menuMap[m.local_id] = m;
+        });
+
         // Resolve product names in items
         const resolveItems = (items) => {
             if (!items) return [];
             const parsed = typeof items === 'string' ? JSON.parse(items) : items;
             return parsed.map(item => {
                 const productId = item.product?.id || item.product?.localId || item.productId || item.id;
-                const product = productMap[productId];
+                let product = productMap[productId];
+
+                // If not found and ID >= 100000, it's likely a menu (virtual ID = 100000 + menu.local_id)
+                if (!product && productId >= 100000) {
+                    const menuLocalId = productId - 100000;
+                    const menu = menuMap[menuLocalId];
+                    if (menu) {
+                        product = { name: menu.name, price: menu.price, categoryName: 'Menus' };
+                    }
+                }
+
                 return {
                     name: product?.name || item.name || item.productName || 'Produit inconnu',
                     categoryName: product?.categoryName || 'Non catégorisé',
